@@ -1,0 +1,5 @@
+pydantic
+uvicorn
+openai
+openai-agents>=0.3.2
+jinja2<4,>=3.1
