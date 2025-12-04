@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    # Ports not exposed to host, only internal network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # Image name allows 'docker compose pull' to work in CI/CD
+    image: ${DOCKER_USERNAME}/apex-backend:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend/storage:/app/storage

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # 1. Database
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Low-RAM optimization for your Hostinger VPS
+    command: postgres -c shared_buffers=128MB -c max_connections=50
+    networks:
+      - apex_network
+
+  # 2. Backend API
+  backend:
+    # CHANGE THIS: Use your actual Docker Hub username!
+    # Example: image: joyboy123/apex-backend:latest
+    image: ${DOCKER_USERNAME}/apex-backend:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8000:8000" # Secure: Only CyberPanel can see this
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Required for Email
+    networks:
+      - apex_network
+
+volumes:
+  postgres_data:
+
+networks:
+  apex_network:
+    driver: bridge

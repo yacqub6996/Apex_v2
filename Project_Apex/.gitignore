@@ -1,0 +1,40 @@
+.vscode
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.env
+/frontend/.env
+
+# Temporary files
+*.tmp
+*.log
+*.diff
+patch.diff
+*_report.json
+tmp_*
+TEMP_*
+
+# Documentation logs
+docs/logging/*.log
+docs/logging/widgets_livedata
+
+# Workspace temporary files
+temp.txt
+segment.txt
+segment_current.txt
+new_segment.txt
+openapi.json
+*.mp4
+*.mov
+*.avi
+
+# Build metadata
+*.tsbuildinfo
+
+# Local storage artifacts
+backend/storage/kyc_documents/
+backend/storage/profile_pictures/
+backend/storage/trader_avatars/
+

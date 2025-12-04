@@ -1,0 +1,9 @@
+feat: implement header navigation routing and hero video integration
+
+- Add smooth scrolling navigation to landing page sections
+- Update header navigation links to target page sections (#features, #about, #pricing, #testimonials, #contact)
+- Create smooth-scroll utility with offset handling for header height
+- Replace hero section placeholder with actual video (better-performance-illustration-video.mp4)
+- Implement custom AutoLoopVideo component with 10-second loop and 0.5x playback speed
+- Add section IDs to landing page components for proper anchor navigation
+- Maintain existing animations and responsive design

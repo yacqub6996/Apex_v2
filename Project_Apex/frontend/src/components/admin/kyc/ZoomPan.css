@@ -1,0 +1,14 @@
+/* Container ensures panning doesn't overflow the viewport */
+.zoompan-container {
+	overflow: hidden;
+	cursor: var(--zoompan-cursor, grab);
+}
+
+/* Content applies the transform using CSS variables controlled by the component */
+.zoompan-content {
+	transform: translate(var(--zoompan-x, 0px), var(--zoompan-y, 0px)) scale(var(--zoompan-scale, 1));
+	transform-origin: 0 0;
+	will-change: transform;
+}
+.zoompan-container{overflow:hidden}
+.zoompan-content{transform-origin:0 0}

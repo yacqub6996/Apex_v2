@@ -1,0 +1,48 @@
+<svg width="720" height="480" viewBox="0 0 720 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient-bg" x1="0" y1="0" x2="720" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="gradient-line" x1="160" y1="340" x2="520" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <radialGradient id="node-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) scale(1)">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20" y="-20" width="760" height="520" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="#0F172A" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <rect width="720" height="480" rx="32" fill="url(#gradient-bg)"/>
+  <g filter="url(#shadow)">
+    <rect x="80" y="80" width="560" height="320" rx="24" fill="#0B1120" stroke="#1E293B" stroke-width="2"/>
+    <rect x="104" y="112" width="176" height="40" rx="12" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+    <text x="120" y="137" fill="#E2E8F0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="18" font-weight="600">Apex Guard</text>
+    <rect x="320" y="112" width="280" height="40" rx="12" fill="#0F172A" stroke="#334155" stroke-width="1.5"/>
+    <text x="336" y="137" fill="#94A3B8" font-family="'Inter', 'Segoe UI', sans-serif" font-size="16">AI-protected investment network</text>
+    <path d="M152 320C200 260 248 260 296 300C344 340 392 220 440 244C488 268 536 188 584 208" stroke="url(#gradient-line)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="184" cy="280" r="8" fill="#059669" stroke="#10B981" stroke-width="2"/>
+    <circle cx="296" cy="300" r="8" fill="#059669" stroke="#10B981" stroke-width="2"/>
+    <circle cx="440" cy="244" r="8" fill="#22D3EE" stroke="#38BDF8" stroke-width="2"/>
+    <circle cx="584" cy="208" r="8" fill="#38BDF8" stroke="#60A5FA" stroke-width="2"/>
+    <g transform="translate(288 168)">
+      <path d="M72 0L12 32V80C12 110 72 144 72 144C72 144 132 110 132 80V32L72 0Z" fill="#0F172A" stroke="#475569" stroke-width="3"/>
+      <path d="M72 28C97 44 112 62 112 80C112 104 94 118 72 130C50 118 32 104 32 80C32 62 47 44 72 28Z" fill="#1E293B"/>
+      <path d="M72 48C84 56 92 64 92 80C92 92 84 100 72 108C60 100 52 92 52 80C52 64 60 56 72 48Z" fill="#0EA5E9"/>
+      <path d="M72 76L82 86L70 98L60 88L72 76Z" fill="#FACC15"/>
+    </g>
+    <g opacity="0.6">
+      <line x1="152" y1="224" x2="568" y2="224" stroke="#1E3A8A" stroke-width="1.5" stroke-dasharray="8 12"/>
+      <line x1="152" y1="256" x2="568" y2="256" stroke="#1E3A8A" stroke-width="1.5" stroke-dasharray="8 12"/>
+      <line x1="152" y1="288" x2="568" y2="288" stroke="#1E3A8A" stroke-width="1.5" stroke-dasharray="8 12"/>
+    </g>
+  </g>
+  <g opacity="0.4">
+    <circle cx="108" cy="120" r="28" fill="url(#node-glow)"/>
+    <circle cx="612" cy="360" r="32" fill="url(#node-glow)"/>
+    <circle cx="180" cy="388" r="24" fill="url(#node-glow)"/>
+  </g>
+</svg>

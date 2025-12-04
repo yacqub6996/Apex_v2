@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./typography.css";
+
+/* stylelint-disable-next-line at-rule-no-unknown */
+/* Tailwind plugins and custom variants are registered in tailwind.config.ts */
+
+/* Mobile-first viewport optimization */
+html {
+    scroll-behavior: smooth;
+    /* Prevent font scaling in landscape while allowing user zoom */
+    /* Omit text-size-adjust due to cross-browser compat noise */
+}
+
+/* Ensure proper viewport behavior on mobile */
+@viewport {
+    width: device-width;
+    zoom: 1.0;
+}
+
+/* Mobile-optimized body styles - Minimal font settings only */
+body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-variant-ligatures: contextual;
+    font-variant-ligatures: contextual;
+    -webkit-font-kerning: normal;
+    font-kerning: normal;
+    
+    /* Mobile-specific optimizations */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+    touch-action: manipulation; /* Improve touch responsiveness */
+    /* Guard overscroll behavior for supported browsers */
+    /* Prevent pull-to-refresh on mobile where supported */
+    /* Using a supports query to avoid compat warnings on older iOS */
+    
+
+@supports (overscroll-behavior-y: contain) {
+    body {
+        overscroll-behavior-y: contain;
+    }
+}
+    /* Safe area insets for mobile devices */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch-friendly interactive elements - Minimal touch-action only */
+button,
+a,
+input,
+select,
+textarea {
+    touch-action: manipulation; /* Improve touch responsiveness */
+}
+
+/* Minimum touch target size for mobile */
+@media (max-width: 600px) {
+    button,
+    .btn,
+    [role="button"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    input,
+    select,
+    textarea {
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+}
+
+@layer utilities {
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+        -webkit-appearance: none;
+    }
+    .scrollbar-hide {
+        /* IE and Edge */
+        -ms-overflow-style: none;
+    }
+    @supports (scrollbar-width: none) {
+        .scrollbar-hide {
+            /* Firefox */
+            scrollbar-width: none;
+        }
+    }
+
+    .transition-inherit-all {
+        transition-property: inherit;
+        transition-duration: inherit;
+        transition-timing-function: inherit;
+    }
+
+    .no-underline {
+        text-decoration: none;
+    }
+
+    /* SVG helpers */
+    .mask-alpha {
+        mask-type: alpha;
+    }
+
+    .gradient-scan-mask {
+        -webkit-mask-image: radial-gradient(52.19% 100% at 50% 0%, #000 0%, rgba(0,0,0,0) 95.31%);
+        mask-image: radial-gradient(52.19% 100% at 50% 0%, #000 0%, rgba(0,0,0,0) 95.31%);
+    }
+
+    /* Sidebar width and offset utilities */
+    .sidebar-width-default {
+        --width: 292px;
+    }
+    .pl-sidebar-offset {
+        padding-left: calc(var(--width) + 4px);
+    }
+}
+
+/* Hide the default expand arrow on Safari.  */
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Hide default arrows from number inputs. */
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+/* Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Hide the default clear button (X) from search inputs. */
+input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+}
+
+/* Mobile-optimized scroll behavior */
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+    outline: 2px solid #4F46E5;
+    outline-offset: 2px;
+}
+
+/* Row highlight animation for success feedback */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rowHighlightFlash {
+    0%   { background-color: rgba(46, 204, 113, 0.35); }
+    100% { background-color: transparent; }
+  }
+
+  .row-highlight {
+    animation: rowHighlightFlash 0.6s ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-highlight {
+    background-color: rgba(46, 204, 113, 0.35);
+    transition: background-color 0.01ms;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

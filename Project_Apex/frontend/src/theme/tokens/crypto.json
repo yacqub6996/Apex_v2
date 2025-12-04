@@ -1,0 +1,87 @@
+{
+  "status": {
+    "pending": {
+      "color": "#06B6D4",
+      "background": "rgba(6, 182, 212, 0.08)",
+      "label": "Awaiting Payment"
+    },
+    "warning": {
+      "color": "#D97706",
+      "background": "rgba(217, 119, 6, 0.08)",
+      "label": "Expiring Soon"
+    },
+    "critical": {
+      "color": "#DC2626",
+      "background": "rgba(220, 38, 38, 0.08)",
+      "label": "Critical"
+    },
+    "expired": {
+      "color": "#DC2626",
+      "background": "rgba(220, 38, 38, 0.08)",
+      "label": "Expired"
+    },
+    "confirmed": {
+      "color": "#059669",
+      "background": "rgba(5, 150, 105, 0.08)",
+      "label": "Confirmed"
+    },
+    "failed": {
+      "color": "#DC2626",
+      "background": "rgba(220, 38, 38, 0.08)",
+      "label": "Failed"
+    },
+    "completed": {
+      "color": "#059669",
+      "background": "rgba(5, 150, 105, 0.08)",
+      "label": "Completed"
+    }
+  },
+  "surfaces": {
+    "card": {
+      "borderRadius": "12px",
+      "padding": {
+        "xs": "12px",
+        "sm": "20px"
+      },
+      "shadow": {
+        "rest": "0 1px 2px rgba(0,0,0,0.04)",
+        "hover": "0 3px 6px rgba(0,0,0,0.06)"
+      }
+    },
+    "modal": {
+      "borderRadius": "16px",
+      "padding": {
+        "xs": "16px",
+        "sm": "24px"
+      }
+    }
+  },
+  "divider": {
+    "light": "rgba(0, 0, 0, 0.08)",
+    "dark": "rgba(255, 255, 255, 0.12)"
+  },
+  "spacing": {
+    "touch": "48px",
+    "xs": "8px",
+    "sm": "12px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "32px"
+  },
+  "qrCode": {
+    "size": {
+      "mobile": "256px",
+      "desktop": "180px"
+    }
+  },
+  "timer": {
+    "warning": {
+      "threshold": 300,
+      "comment": "Show warning at 5 minutes (300 seconds)"
+    },
+    "critical": {
+      "threshold": 60,
+      "comment": "Show critical at 60 seconds"
+    }
+  }
+}
