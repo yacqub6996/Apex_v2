@@ -1,28 +1,27 @@
-"""add_roi_transaction_type
+"""add_roi_transaction_type_fixed
 
-Revision ID: 2025_10_15_0251_add_roi_transaction_type
+Revision ID: 202510150251
 Revises: d5abbb14e0d1
 Create Date: 2025-10-15 02:51:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
+import sqlmodel.sql.sqltypes
 
-
-# revision identifiers, used by Alembic.
-revision = '2025_10_15_0251_add_roi_transaction_type'
+# --- FIX: Shortened the ID to fit in the database (Max 32 chars) ---
+revision = '202510150251'
+# -------------------------------------------------------------------
 down_revision = 'd5abbb14e0d1'
 branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
-    # Add ROI to the transactiontype enum
-    op.execute("ALTER TYPE transactiontype ADD VALUE 'ROI'")
+def upgrade():
+    # This migration was a duplicate/zombie.
+    # We pass to allow the database to skip it without error.
+    pass
 
 
-def downgrade() -> None:
-    # Remove ROI from the transactiontype enum
-    # Note: This is complex in PostgreSQL - we'd need to create a new enum and migrate data
-    # For simplicity, we'll just document that downgrade requires manual intervention
+def downgrade():
     pass
