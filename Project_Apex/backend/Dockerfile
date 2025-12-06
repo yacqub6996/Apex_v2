@@ -25,11 +25,14 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 COPY app ./app
 COPY scripts ./scripts
 
-# --- THE FIX: Create 'static' everywhere to guarantee it is found ---
-# We create it in root (/app/static) AND in the module (/app/app/static)
-RUN mkdir -p static && mkdir -p app/static
-# ------------------------------------------------------------------
+# --- FIX: Copy Database Migration Files ---
+COPY alembic.ini .
+COPY alembic ./alembic
+# ------------------------------------------
 
-# 7. Start the App
+# 7. Create Static Directories (Prevents Crash)
+RUN mkdir -p static && mkdir -p app/static
+
+# 8. Start the App
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
