@@ -25,12 +25,12 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 COPY app ./app
 COPY scripts ./scripts
 
-# --- FIX: Copy Database Migration Files ---
+# --- FIX: Copy Alembic from the CORRECT location (app/alembic) ---
 COPY alembic.ini .
-COPY alembic ./alembic
-# ------------------------------------------
+COPY app/alembic ./alembic
+# -----------------------------------------------------------------
 
-# 7. Create Static Directories (Prevents Crash)
+# 7. Create Static Directories
 RUN mkdir -p static && mkdir -p app/static
 
 # 8. Start the App
