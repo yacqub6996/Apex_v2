@@ -41,6 +41,7 @@ def upgrade():
         sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('title', sa.String(length=255), nullable=False),
         sa.Column('message', sa.String(length=1000), nullable=False),
+        # --- FIX: Added create_type=False here ---
         sa.Column('notification_type', sa.Enum(
             'KYC_APPROVED',
             'KYC_REJECTED',
@@ -52,8 +53,10 @@ def upgrade():
             'INVESTMENT_MATURED',
             'SECURITY_ALERT',
             'SYSTEM_ANNOUNCEMENT',
-            name='notificationtype'
+            name='notificationtype',
+            create_type=False 
         ), nullable=False),
+        # -----------------------------------------
         sa.Column('is_read', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('related_entity_type', sa.String(length=50), nullable=True),
         sa.Column('related_entity_id', sa.String(length=100), nullable=True),
