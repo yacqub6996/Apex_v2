@@ -61,11 +61,11 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
     )
-    # --- FIX IS HERE: Added create_type=False to the status column ---
+    # --- FIX: Changed to sa.String() to bypass duplicate Enum error ---
     op.create_table('userlongterminvestment',
     sa.Column('allocation', sa.Float(), nullable=False),
     sa.Column('started_at', sa.DateTime(), nullable=False),
-    sa.Column('status', sa.Enum('ACTIVE', 'PAUSED', 'STOPPED', name='copystatus', create_type=False), nullable=False),
+    sa.Column('status', sa.String(), nullable=False), 
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
     sa.Column('plan_id', sa.Uuid(), nullable=False),
