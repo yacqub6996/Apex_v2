@@ -25,9 +25,10 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 COPY app ./app
 COPY scripts ./scripts
 
-# --- FIX: Create missing static directory to prevent crash ---
-RUN mkdir -p app/static
-# -------------------------------------------------------------
+# --- THE FIX: Create 'static' everywhere to guarantee it is found ---
+# We create it in root (/app/static) AND in the module (/app/app/static)
+RUN mkdir -p static && mkdir -p app/static
+# ------------------------------------------------------------------
 
 # 7. Start the App
 EXPOSE 8000
