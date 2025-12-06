@@ -17,22 +17,23 @@ depends_on = None
 
 
 def upgrade():
-    # Create notification type enum
-    notification_type_enum = postgresql.ENUM(
-        'KYC_APPROVED',
-        'KYC_REJECTED',
-        'WITHDRAWAL_APPROVED',
-        'WITHDRAWAL_REJECTED',
-        'DEPOSIT_CONFIRMED',
-        'ROI_RECEIVED',
-        'COPY_TRADE_EXECUTED',
-        'INVESTMENT_MATURED',
-        'SECURITY_ALERT',
-        'SYSTEM_ANNOUNCEMENT',
-        name='notificationtype',
-        create_type=True
-    )
-    notification_type_enum.create(op.get_bind(), checkfirst=True)
+    # --- FIX: Commented out explicit Enum creation to bypass "Type already exists" error ---
+    # notification_type_enum = postgresql.ENUM(
+    #     'KYC_APPROVED',
+    #     'KYC_REJECTED',
+    #     'WITHDRAWAL_APPROVED',
+    #     'WITHDRAWAL_REJECTED',
+    #     'DEPOSIT_CONFIRMED',
+    #     'ROI_RECEIVED',
+    #     'COPY_TRADE_EXECUTED',
+    #     'INVESTMENT_MATURED',
+    #     'SECURITY_ALERT',
+    #     'SYSTEM_ANNOUNCEMENT',
+    #     name='notificationtype',
+    #     create_type=True
+    # )
+    # notification_type_enum.create(op.get_bind(), checkfirst=True)
+    # -------------------------------------------------------------------------------------
 
     # Create notification table
     op.create_table(
@@ -42,22 +43,9 @@ def upgrade():
         sa.Column('title', sa.String(length=255), nullable=False),
         sa.Column('message', sa.String(length=1000), nullable=False),
         
-        # --- FIX: Added create_type=False to prevent duplicate error ---
-        sa.Column('notification_type', sa.Enum(
-            'KYC_APPROVED',
-            'KYC_REJECTED',
-            'WITHDRAWAL_APPROVED',
-            'WITHDRAWAL_REJECTED',
-            'DEPOSIT_CONFIRMED',
-            'ROI_RECEIVED',
-            'COPY_TRADE_EXECUTED',
-            'INVESTMENT_MATURED',
-            'SECURITY_ALERT',
-            'SYSTEM_ANNOUNCEMENT',
-            name='notificationtype',
-            create_type=False
-        ), nullable=False),
-        # ---------------------------------------------------------------
+        # --- FIX: Changed to sa.String() to completely bypass the Enum collision ---
+        sa.Column('notification_type', sa.String(), nullable=False),
+        # ---------------------------------------------------------------------------
         
         sa.Column('is_read', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('related_entity_type', sa.String(length=50), nullable=True),
@@ -93,5 +81,5 @@ def downgrade():
     op.drop_table('notification')
     
     # Drop enum type
-    notification_type_enum = postgresql.ENUM(name='notificationtype')
-    notification_type_enum.drop(op.get_bind(), checkfirst=True)
+    # notification_type_enum = postgresql.ENUM(name='notificationtype')
+    # notification_type_enum.drop(op.get_bind(), checkfirst=True)
