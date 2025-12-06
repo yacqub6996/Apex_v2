@@ -61,10 +61,11 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')
     )
+    # --- FIX IS HERE: Added create_type=False to the status column ---
     op.create_table('userlongterminvestment',
     sa.Column('allocation', sa.Float(), nullable=False),
     sa.Column('started_at', sa.DateTime(), nullable=False),
-    sa.Column('status', sa.Enum('ACTIVE', 'PAUSED', 'STOPPED', name='copystatus'), nullable=False),
+    sa.Column('status', sa.Enum('ACTIVE', 'PAUSED', 'STOPPED', name='copystatus', create_type=False), nullable=False),
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
     sa.Column('plan_id', sa.Uuid(), nullable=False),
@@ -72,6 +73,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    # ------------------------------------------------------------------
     op.create_table('usermilestone',
     sa.Column('milestone_type', sa.Enum('FIRST_DEPOSIT', 'TRADING_VOLUME_100', 'TRADING_VOLUME_1000', 'CONSISTENT_PROFITS', 'PORTFOLIO_DIVERSIFICATION', 'ACCOUNT_AGE_30', 'ACCOUNT_AGE_90', 'REFERRAL_BONUS', name='milestonetype'), nullable=False),
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
