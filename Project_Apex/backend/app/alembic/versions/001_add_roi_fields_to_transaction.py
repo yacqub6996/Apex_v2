@@ -1,6 +1,6 @@
 """Add ROI fields to Transaction table
 
-Revision ID: 001_add_roi_fields_to_transaction
+Revision ID: '001_add_roi_txn'
 Revises: 
 Create Date: 2025-10-15 12:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '001_add_roi_fields_to_transaction'
+revision = '001_add_roi_txn'
 down_revision = None
 branch_labels = None
 depends_on = None
