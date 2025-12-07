@@ -52,8 +52,8 @@ export const LongTermStatus = () => {
         queryFn: () => RoiCalculationsService.roiCalculationsGetLongTermRoiHistory(1, 100),
     });
 
-    const investments = investmentsQuery.data ?? [];
-    const roiEvents = roiHistoryQuery.data?.data ?? [];
+    const investments = Array.isArray(investmentsQuery.data) ? investmentsQuery.data : [];
+    const roiEvents = Array.isArray(roiHistoryQuery.data?.data) ? roiHistoryQuery.data!.data : [];
 
     const activePlans = useMemo(
         () => investments.filter((inv) => inv.status === "ACTIVE"),

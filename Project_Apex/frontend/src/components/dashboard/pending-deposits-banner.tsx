@@ -15,7 +15,7 @@ const formatDate = (value?: string | null) => {
 
 export const PendingDepositsBanner = ({ variant = "default" }: { variant?: "default" | "compact" }) => {
   const { data, isLoading } = usePendingDeposits();
-  const deposits = data ?? [];
+  const deposits = Array.isArray(data) ? data : [];
 
   if (isLoading && !deposits.length) return null;
   if (!deposits.length) return null;
