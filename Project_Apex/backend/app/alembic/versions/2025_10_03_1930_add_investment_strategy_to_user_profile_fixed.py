@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.execute("CREATE TYPE investmentstrategy AS ENUM ('ACTIVE_PORTFOLIO', 'LONG_TERM_GROWTH', 'BALANCED')")
     
     # Add the column with the enum type - ensure it matches the Python model
-    op.add_column('userprofile', sa.Column('investment_strategy', sa.Enum('ACTIVE_PORTFOLIO', 'LONG_TERM_GROWTH', 'BALANCED', name='investmentstrategy'), server_default='BALANCED', nullable=False))
+    op.add_column('userprofile', sa.Column('investment_strategy', sa.Enum('ACTIVE_PORTFOLIO', 'LONG_TERM_GROWTH', 'BALANCED', name='investmentstrategy', create_type=False), server_default='BALANCED', nullable=False))
 
 
 def downgrade() -> None:

@@ -1,6 +1,6 @@
 """Add catalog version tracking for long-term plans
 
-Revision ID: 20251219_add_plan_catalog_version
+Revision ID: 20251219_plan_catalog_version
 Revises: 20251211_merge_maximum_deposit
 Create Date: 2025-12-19 00:00:00.000000
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20251219_add_plan_catalog_version"
+revision = "20251219_plan_catalog_version"
 down_revision = "20251211_merge_maximum_deposit"
 branch_labels = None
 depends_on = None

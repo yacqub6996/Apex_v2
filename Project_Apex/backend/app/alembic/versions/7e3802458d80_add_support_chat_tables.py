@@ -1,7 +1,7 @@
 """add_support_chat_tables
 
 Revision ID: 7e3802458d80
-Revises: 20251220_add_kyc_submitted_notification_type
+Revises: 20251220_kyc_submitted_notif
 Create Date: 2025-12-02 21:07:40.448314
 
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '7e3802458d80'
-down_revision = '20251220_add_kyc_submitted_notification_type'
+down_revision = '20251220_kyc_submitted_notif'
 branch_labels = None
 depends_on = None
 

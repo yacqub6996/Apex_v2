@@ -29,7 +29,7 @@ def upgrade():
     )
     op.create_table('longtermplan',
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
-    sa.Column('tier', sa.Enum('FOUNDATION', 'GROWTH', 'ELITE', name='longtermplantier'), nullable=True),
+    sa.Column('tier', sa.Enum('FOUNDATION', 'GROWTH', 'ELITE', name='longtermplantier', create_type=False), nullable=True),
     sa.Column('minimum_deposit', sa.Float(), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(length=500), nullable=True),
     sa.Column('id', sa.Uuid(), nullable=False),
@@ -40,7 +40,7 @@ def upgrade():
     sa.Column('amount', sa.Float(), nullable=False),
     sa.Column('from_balance_type', sqlmodel.sql.sqltypes.AutoString(length=20), nullable=False),
     sa.Column('to_balance_type', sqlmodel.sql.sqltypes.AutoString(length=20), nullable=False),
-    sa.Column('status', sa.Enum('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', name='balancetransferstatus'), nullable=False),
+    sa.Column('status', sa.Enum('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', name='balancetransferstatus', create_type=False), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
@@ -73,7 +73,7 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('usermilestone',
-    sa.Column('milestone_type', sa.Enum('FIRST_DEPOSIT', 'TRADING_VOLUME_100', 'TRADING_VOLUME_1000', 'CONSISTENT_PROFITS', 'PORTFOLIO_DIVERSIFICATION', 'ACCOUNT_AGE_30', 'ACCOUNT_AGE_90', 'REFERRAL_BONUS', name='milestonetype'), nullable=False),
+    sa.Column('milestone_type', sa.Enum('FIRST_DEPOSIT', 'TRADING_VOLUME_100', 'TRADING_VOLUME_1000', 'CONSISTENT_PROFITS', 'PORTFOLIO_DIVERSIFICATION', 'ACCOUNT_AGE_30', 'ACCOUNT_AGE_90', 'REFERRAL_BONUS', name='milestonetype', create_type=False), nullable=False),
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('reward', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=True),

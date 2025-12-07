@@ -37,7 +37,7 @@ def upgrade():
     op.create_table('kycdocument',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
-    sa.Column('document_type', sa.Enum('PASSPORT', 'DRIVERS_LICENSE', 'NATIONAL_ID', 'PROOF_OF_ADDRESS', name='kycdocumenttype'), nullable=False),
+    sa.Column('document_type', sa.Enum('PASSPORT', 'DRIVERS_LICENSE', 'NATIONAL_ID', 'PROOF_OF_ADDRESS', name='kycdocumenttype', create_type=False), nullable=False),
     sa.Column('front_image_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('back_image_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('verified', sa.Boolean(), nullable=False),
