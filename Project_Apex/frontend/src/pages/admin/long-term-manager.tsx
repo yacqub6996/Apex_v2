@@ -36,7 +36,7 @@ export const LongTermManager = () => {
     queryFn: () => AdminLongTermService.adminLongTermListLongTermPlansForAdmin(),
   });
 
-  const longTermPlans = longTermPlansQuery.data ?? [];
+  const longTermPlans = Array.isArray(longTermPlansQuery.data) ? longTermPlansQuery.data : [];
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [longTermRoiPercent, setLongTermRoiPercent] = useState<string>("");
