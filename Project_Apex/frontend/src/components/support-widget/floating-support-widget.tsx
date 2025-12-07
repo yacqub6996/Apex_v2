@@ -192,8 +192,10 @@ export const FloatingSupportWidget = () => {
         <Paper
           elevation={8}
           sx={{
-            width: { xs: 320, sm: 380 },
-            height: isMinimized ? 56 : { xs: 480, sm: 520 },
+            // On mobile, let the widget breathe near the bottom-right corner
+            // instead of occupying most of the viewport height.
+            width: { xs: 'min(100vw - 32px, 380px)', sm: 380 },
+            height: isMinimized ? 56 : { xs: 360, sm: 520 },
             display: 'flex',
             flexDirection: 'column',
             borderRadius: 3,
