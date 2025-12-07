@@ -16,7 +16,17 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE notificationtype ADD VALUE 'KYC_SUBMITTED'")
+    # Safely add enum value only if the type exists
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notificationtype') THEN
+                ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'KYC_SUBMITTED';
+            END IF;
+        END$$;
+        """
+    )
 
 
 def downgrade() -> None:
