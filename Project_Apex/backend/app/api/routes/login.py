@@ -106,8 +106,13 @@ def login_access_token(
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    if not user.email_verified:
-        raise HTTPException(status_code=403, detail="Email not verified. Please check your inbox for the verification link.")
+    # Only enforce email verification when an email provider is configured.
+    # In environments without outbound email, allow login without verification.
+    if settings.emails_enabled and not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified. Please check your inbox for the verification link.",
+        )
     previous_login = user.last_login_at
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = security.create_access_token(
