@@ -63,18 +63,38 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build Frontend
-        run: npm run build
+      # --- CRITICAL FIX 1: Inject the Production API URL before build ---
+      - name: Configure and Build Frontend
+        run: |
+          # 1. Configure the API URL to point to the secure Reverse Proxy path.
+          # The browser will call this URL, and CyberPanel will forward it to Docker:8000.
+          echo "VITE_API_BASE_URL=https://apex-portfolios.org/api/v1" > .env.production
+          
+          # 2. Run the build (uses the VITE variable)
+          npm run build
 
-      - name: Deploy to CyberPanel
-        uses: appleboy/scp-action@v0.1.7
+      # --- CRITICAL FIX 2: Use SSH for Copying and Permissions ---
+      - name: Deploy and Set Permissions on CyberPanel
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
-          # SOURCE: Relative to Repo Root
-          source: "Project_Apex/frontend/dist/*"
-          # TARGET: Your specific domain folder
-          target: "/home/apex-portfolios.org/public_html"
-          # STRIP: Removes "Project_Apex/frontend/dist" from the upload path
-          strip_components: 3
+          script: |
+            DEPLOY_DIR="/home/admin/public_html/apex-portfolios.org"
+            SYSTEM_USER="admin"
+            BUILD_PATH="/home/runner/work/${{ github.repository }}/Project_Apex/frontend/dist"
+
+            echo "Starting deployment to $DEPLOY_DIR"
+
+            # 1. Clear out the existing files from the public directory
+            rm -rf ${DEPLOY_DIR}/*
+            
+            # 2. Copy the fresh build artifacts from the runner workspace to the VPS directory
+            cp -r ${{ github.workspace }}/Project_Apex/frontend/dist/* $DEPLOY_DIR/
+
+            # 3. Correct ownership for web server access (CRITICAL for CyberPanel)
+            # This allows the web server (OpenLiteSpeed/admin) to read the files.
+            chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
+            
+            echo "Deployment to $DEPLOY_DIR finished."
