@@ -38,8 +38,9 @@ from app.models import (
 )
 from app.utils import (
     generate_email_verification_token,
+    generate_email_verification_email,
+    send_email,
 )
-from app.services.email_sender import send_welcome_email, send_verification_email
 from app.services.file_storage import file_storage_service
 from app.services.notification_service import (
     email_profile_change,
@@ -106,13 +107,21 @@ async def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
             detail="The user with this email already exists in the system.",
         )
     user = crud.create_user(session=session, user_create=user_in)
-    if settings.emails_enabled and user_in.email:
+    if settings.emails_enabled and user.email:
         try:
-            send_welcome_email(user_in.email, user_in.full_name)
-            token = generate_email_verification_token(user_in.email)
-            send_verification_email(user_in.email, token)
+            token = generate_email_verification_token(user.email)
+            email_data = generate_email_verification_email(user.email, token)
+            await send_email(
+                email_to=user.email,
+                subject=email_data.subject,
+                html_content=email_data.html_content,
+            )
         except Exception:
-            logger.warning("Failed to dispatch welcome/verification email", exc_info=True)
+            logger.warning(
+                "admin_create_verification_email_failed",
+                extra={"email": user.email},
+                exc_info=True,
+            )
     return user
 
 
@@ -258,14 +267,22 @@ async def register_user(session: SessionDep, user_in: UserRegister, request: Req
     user = crud.create_user(session=session, user_create=user_create)
 
     # Send verification email immediately after signup when email is configured
-    try:
-        if settings.emails_enabled and user.email:
-            send_welcome_email(user.email, user.full_name)
+    if settings.emails_enabled and user.email:
+        try:
             token = generate_email_verification_token(user.email)
-            send_verification_email(user.email, token)
-    except Exception:
-        # Do not block signup if email fails; logs are handled inside send_email
-        pass
+            email_data = generate_email_verification_email(user.email, token)
+            await send_email(
+                email_to=user.email,
+                subject=email_data.subject,
+                html_content=email_data.html_content,
+            )
+        except Exception:
+            # Do not block signup if email fails; failures are logged inside send_email
+            logger.warning(
+                "signup_verification_email_failed",
+                extra={"email": user.email},
+                exc_info=True,
+            )
 
     return user
 
