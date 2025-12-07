@@ -33,3 +33,6 @@ openapi.json
 src/**/*.js
 src/**/*.js.map
 src/**/*.d.ts
+
+# Allow checked-in TS declaration for MUI theme augmentation
+!src/theme.d.ts
