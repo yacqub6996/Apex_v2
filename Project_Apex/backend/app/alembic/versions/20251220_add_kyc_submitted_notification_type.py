@@ -1,6 +1,6 @@
 """Add KYC_SUBMITTED notification type
 
-Revision ID: 20251220_add_kyc_submitted_notification_type
+Revision ID: 20251220_kyc_submitted_notif
 Revises: add_plan_catalog_version
 Create Date: 2025-12-20 00:00:00.000000
 """
@@ -9,7 +9,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "20251220_add_kyc_submitted_notification_type"
+revision = "20251220_kyc_submitted_notif"
 down_revision = "add_plan_catalog_version"
 branch_labels = None
 depends_on = None
