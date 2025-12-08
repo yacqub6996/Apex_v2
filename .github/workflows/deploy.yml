@@ -107,21 +107,3 @@ jobs:
             DEPLOY_DIR="/home/apex-portfolios.org/public_html"
             SYSTEM_USER="apexp9890"
             chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
-            
-            # Recreate SPA .htaccess with API-safe rules if missing
-            HTACCESS="${DEPLOY_DIR}/.htaccess"
-            if [ ! -f "${HTACCESS}" ]; then
-              cat > "${HTACCESS}" <<'EOF'
-              RewriteEngine On
-              
-              # Swagger docs via direct URL (optional)
-              RewriteRule ^docs(.*)$ http://127.0.0.1:8000/docs$1 [P,L]
-              RewriteRule ^openapi\.json$ http://127.0.0.1:8000/openapi.json [P,L]
-              
-              # React Router fallback for SPA routes
-              RewriteCond %{REQUEST_FILENAME} !-f
-              RewriteCond %{REQUEST_FILENAME} !-d
-              RewriteRule . /index.html [L]
-              EOF
-              chown $SYSTEM_USER:$SYSTEM_USER "${HTACCESS}"
-            fi
