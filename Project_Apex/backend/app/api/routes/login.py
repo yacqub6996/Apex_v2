@@ -307,6 +307,15 @@ async def request_password_reset(email: str, session: SessionDep) -> Message:
     )
 
 
+@router.post("/login/password-reset-request", response_model=Message, status_code=200)
+async def legacy_password_reset_request(email: str, session: SessionDep) -> Message:
+    """
+    Backwards-compatible alias for older frontend builds that still call
+    `/login/password-reset-request`. New clients should use `/password-reset-request`.
+    """
+    return await request_password_reset(email=email, session=session)
+
+
 @router.post("/reset-password/", response_model=Message, status_code=200)
 def reset_password(session: SessionDep, body: NewPassword) -> Message:
     """
