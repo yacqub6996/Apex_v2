@@ -249,14 +249,41 @@ async def recover_password(email: str, session: SessionDep) -> Message:
 
 
 @router.post("/password-reset-request", response_model=Message, status_code=200)
-def request_password_reset(email: str, session: SessionDep) -> Message:
+async def request_password_reset(email: str, session: SessionDep) -> Message:
     """
-    Log a password reset request for manual processing (no email sent).
-    Used when SMTP is not configured.
+    Password reset entrypoint used by the frontend.
+
+    Behaviour:
+    - When email sending is configured, dispatch a standard reset email with a tokenised link.
+    - Otherwise, log the request for manual processing.
+    - Always return a generic success message to avoid user enumeration.
     """
     user = crud.get_user_by_email(session=session, email=email)
-    
-    # Always return success to avoid user enumeration
+
+    # When email is configured and the user exists, send a reset email.
+    if user and settings.emails_enabled:
+        try:
+            password_reset_token = generate_password_reset_token(email=email)
+            email_data = generate_reset_password_email(
+                email_to=user.email, email=email, token=password_reset_token
+            )
+            await send_email(
+                email_to=user.email,
+                subject=email_data.subject,
+                html_content=email_data.html_content,
+            )
+            logger.info(
+                "password_reset_email_dispatched",
+                extra={"user_id": str(user.id), "email": email},
+            )
+        except Exception:
+            # Do not leak details to the client; log for operators.
+            logger.exception(
+                "password_reset_email_failed",
+                extra={"user_id": str(user.id), "email": email},
+            )
+
+    # Log the request for observability, regardless of email configuration.
     if user:
         logger.info(
             "password_reset_request_received",
@@ -271,9 +298,12 @@ def request_password_reset(email: str, session: SessionDep) -> Message:
             "password_reset_request_for_unknown_email",
             extra={"email": email, "timestamp": utc_now().isoformat()},
         )
-    
+
     return Message(
-        message="Your password reset request has been logged. Our support team will process it manually and contact you via email."
+        message=(
+            "If an account with that email exists, "
+            "we've sent password reset instructions to the registered address."
+        )
     )
 
 

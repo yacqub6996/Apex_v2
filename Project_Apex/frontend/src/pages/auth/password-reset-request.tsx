@@ -19,7 +19,8 @@ export const PasswordResetRequest = () => {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL ?? ''}/api/v1/login/password-reset-request?email=${encodeURIComponent(email)}`,
+        // Backend route is /api/v1/password-reset-request (no /login prefix)
+        `${import.meta.env.VITE_API_URL ?? ''}/api/v1/password-reset-request?email=${encodeURIComponent(email)}`,
         {
           method: 'POST',
           headers: {
