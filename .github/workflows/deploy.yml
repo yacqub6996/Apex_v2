@@ -79,9 +79,14 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
-            DEPLOY_DIR="/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
             mkdir -p ${DEPLOY_DIR}
-            rm -rf ${DEPLOY_DIR}/*
+            # Remove only files we manage, keep .htaccess and ACME dirs
+            rm -rf ${DEPLOY_DIR}/index.html \
+                   ${DEPLOY_DIR}/assets \
+                   ${DEPLOY_DIR}/images \
+                   ${DEPLOY_DIR}/apex-favicon.svg \
+                   ${DEPLOY_DIR}/vite.svg
 
       - name: Upload frontend build to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -90,15 +95,33 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           source: "Project_Apex/frontend/dist/*"
-          target: "/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
+          target: "/home/apex-portfolios.org/public_html"
 
-      - name: Fix permissions on CyberPanel
+      - name: Fix permissions and ensure .htaccess on CyberPanel
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
-            DEPLOY_DIR="/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
             SYSTEM_USER="apexp9890"
             chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
+            
+            # Recreate SPA .htaccess with API-safe rules if missing
+            HTACCESS="${DEPLOY_DIR}/.htaccess"
+            if [ ! -f "${HTACCESS}" ]; then
+              cat > "${HTACCESS}" <<'EOF'
+              RewriteEngine On
+              
+              # Swagger docs via direct URL (optional)
+              RewriteRule ^docs(.*)$ http://127.0.0.1:8000/docs$1 [P,L]
+              RewriteRule ^openapi\.json$ http://127.0.0.1:8000/openapi.json [P,L]
+              
+              # React Router fallback for SPA routes
+              RewriteCond %{REQUEST_FILENAME} !-f
+              RewriteCond %{REQUEST_FILENAME} !-d
+              RewriteRule . /index.html [L]
+              EOF
+              chown $SYSTEM_USER:$SYSTEM_USER "${HTACCESS}"
+            fi
