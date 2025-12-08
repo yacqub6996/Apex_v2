@@ -106,10 +106,9 @@ export const SupportChat = () => {
         borderColor: 'divider',
         overflow: 'hidden',
         bgcolor: 'background.paper',
-        // Responsive height: smaller on mobile, larger on desktop
-        height: { xs: 360, sm: 420, md: 480 },
-        minHeight: 300,
-        maxHeight: '60vh',
+        // Responsive height: give the chat more room on mobile
+        height: { xs: 'min(80vh, 520px)', sm: 420, md: 480 },
+        minHeight: 320,
       }}
     >
       <ChatKit
