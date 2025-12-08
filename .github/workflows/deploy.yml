@@ -48,10 +48,6 @@ jobs:
 
   deploy-frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # Run npm commands inside the subfolder
-        working-directory: ./Project_Apex/frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -61,10 +57,12 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
+        working-directory: ./Project_Apex/frontend
         run: npm ci
 
       # --- CRITICAL FIX 1: Inject the Production API URL before build ---
       - name: Configure and Build Frontend
+        working-directory: ./Project_Apex/frontend
         run: |
           # 1. Configure the API URL to point to the secure Reverse Proxy path.
           # The browser will call this URL, and CyberPanel will forward it to Docker:8000.
@@ -73,28 +71,33 @@ jobs:
           # 2. Run the build (uses the VITE variable)
           npm run build
 
-      # --- CRITICAL FIX 2: Use SSH for Copying and Permissions ---
-      - name: Deploy and Set Permissions on CyberPanel
+      # --- Upload built frontend to the correct docroot on the VPS ---
+      - name: Clear existing frontend on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
-            DEPLOY_DIR="/home/admin/public_html/apex-portfolios.org"
-            SYSTEM_USER="admin"
-            BUILD_PATH="/home/runner/work/${{ github.repository }}/Project_Apex/frontend/dist"
-
-            echo "Starting deployment to $DEPLOY_DIR"
-
-            # 1. Clear out the existing files from the public directory
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
             rm -rf ${DEPLOY_DIR}/*
-            
-            # 2. Copy the fresh build artifacts from the runner workspace to the VPS directory
-            cp -r ${{ github.workspace }}/Project_Apex/frontend/dist/* $DEPLOY_DIR/
 
-            # 3. Correct ownership for web server access (CRITICAL for CyberPanel)
-            # This allows the web server (OpenLiteSpeed/admin) to read the files.
+      - name: Upload frontend build to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: root
+          password: ${{ secrets.HOST_PASSWORD }}
+          source: "Project_Apex/frontend/dist/*"
+          target: "/home/apex-portfolios.org/public_html"
+
+      - name: Fix permissions on CyberPanel
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: root
+          password: ${{ secrets.HOST_PASSWORD }}
+          script: |
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
+            SYSTEM_USER="apexp9890"
             chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
-            
-            echo "Deployment to $DEPLOY_DIR finished."
