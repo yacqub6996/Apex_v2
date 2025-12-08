@@ -28,7 +28,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/apex-backend:latest
 
       - name: Deploy Backend via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.4
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
@@ -73,7 +73,7 @@ jobs:
 
       # --- Upload built frontend to the correct docroot on the VPS ---
       - name: Clear existing frontend on VPS
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.4
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
@@ -98,7 +98,7 @@ jobs:
           target: "/home/apex-portfolios.org/public_html"
 
       - name: Fix permissions and ensure .htaccess on CyberPanel
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.4
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
