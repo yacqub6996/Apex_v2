@@ -106,4 +106,12 @@ jobs:
           script: |
             DEPLOY_DIR="/home/apex-portfolios.org/public_html"
             SYSTEM_USER="apexp9890"
+            # Ensure ownership
             chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
+            # Ensure directory execute bits so LiteSpeed can traverse
+            chmod 711 /home/apex-portfolios.org
+            chmod 755 "$DEPLOY_DIR"
+            # Assets/images may not exist on first deploy; ignore errors
+            chmod 755 "$DEPLOY_DIR/assets" "$DEPLOY_DIR/images" 2>/dev/null || true
+            # Standard file perms
+            find "$DEPLOY_DIR" -type f -exec chmod 644 {} \;
