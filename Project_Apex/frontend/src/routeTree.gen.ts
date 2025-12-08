@@ -27,6 +27,7 @@ import { Route as DashboardExecutionsRouteImport } from './routes/dashboard/exec
 import { Route as DashboardCopyTradingRouteImport } from './routes/dashboard/copy-trading'
 import { Route as DashboardAccountRouteImport } from './routes/dashboard/account'
 import { Route as AuthResetRouteImport } from './routes/auth/reset'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminTraderManagerRouteImport } from './routes/admin/trader-manager'
 import { Route as AdminPlanManagerRouteImport } from './routes/admin/plan-manager'
@@ -127,6 +128,11 @@ const AuthResetRoute = AuthResetRouteImport.update({
   path: '/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -255,6 +263,7 @@ export interface FileRoutesById {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -286,6 +295,7 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
+    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -315,6 +325,7 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
+    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
+    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -374,6 +386,7 @@ export interface RootRouteChildren {
   AdminTraderManagerRoute: typeof AdminTraderManagerRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AuthResetRoute: typeof AuthResetRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -504,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/users': {
       id: '/admin/users'
       path: '/admin/users'
@@ -623,6 +643,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminTraderManagerRoute: AdminTraderManagerRoute,
   AdminUsersRoute: AdminUsersRoute,
   AuthResetRoute: AuthResetRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

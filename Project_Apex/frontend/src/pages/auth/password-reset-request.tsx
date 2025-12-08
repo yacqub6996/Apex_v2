@@ -19,14 +19,15 @@ export const PasswordResetRequest = () => {
 
     try {
       const response = await fetch(
-        // Backend route is /api/v1/password-reset-request (no /login prefix)
-        `${import.meta.env.VITE_API_URL ?? ''}/api/v1/password-reset-request?email=${encodeURIComponent(email)}`,
+        `${import.meta.env.VITE_API_URL ?? ''}/api/v1/password-reset-request?email=${encodeURIComponent(
+          email,
+        )}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -78,25 +79,25 @@ export const PasswordResetRequest = () => {
                 Request Received
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Your password reset request has been logged
+                If an account exists for this email, you&apos;ll receive a reset link shortly.
               </Typography>
             </Box>
 
             <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                We currently process password resets manually for security. Our support team will review
-                your request and contact you via email within 24-48 hours with instructions.
+                Please check your inbox and spam folder for an email with a password reset link. The link is
+                time-limited to help keep your account secure.
               </Typography>
             </Alert>
 
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               <strong>What happens next:</strong>
               <br />
-              • Our team reviews your request
+              • Open the email we send you
               <br />
-              • You'll receive an email with reset instructions
+              • Click the reset link to choose a new password
               <br />
-              • Follow the link in the email to reset your password
+              • Sign in using your updated password
             </Typography>
 
             <Button
@@ -140,8 +141,8 @@ export const PasswordResetRequest = () => {
               Secure Password Recovery
             </Typography>
             <Typography variant="body1" sx={{ opacity: 0.9 }}>
-              We take security seriously. All password reset requests are manually reviewed by our team
-              to ensure your account stays protected.
+              When you submit your email, we&apos;ll send a secure, time-limited password reset link if an
+              account exists. This keeps your account safe while making recovery fast and simple.
             </Typography>
           </Box>
         </Box>
@@ -184,7 +185,8 @@ export const PasswordResetRequest = () => {
               Reset Password
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Enter your email to request a password reset
+              Enter your email to request a password reset. If an account exists, you&apos;ll receive a secure
+              reset link.
             </Typography>
           </Box>
 
@@ -246,11 +248,12 @@ export const PasswordResetRequest = () => {
             Need Help?
           </Typography>
           <Typography variant="body1" sx={{ opacity: 0.9 }}>
-            Password resets are processed manually by our support team. This ensures your account
-            security while we work on enabling automated email recovery.
+            If no email arrives after a few minutes, double-check the address you entered or contact support
+            for assistance. For security, we only indicate success if an account may exist for that email.
           </Typography>
         </Box>
       </Box>
     </motion.section>
   );
 };
+

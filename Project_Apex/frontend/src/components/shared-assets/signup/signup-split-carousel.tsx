@@ -18,10 +18,12 @@ export const SignupSplitCarousel = () => {
     const HERO_VIDEO_SRC = publicAsset("assets/illustrations/new-hero_video.mp4");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
 
     const handleSignup: React.FormEventHandler<HTMLFormElement> = async (e) => {
         e.preventDefault();
         setError(null);
+        setPasswordError(null);
         setIsLoading(true);
         try {
             const formData = new FormData(e.currentTarget);
@@ -29,7 +31,20 @@ export const SignupSplitCarousel = () => {
             const lastName = (formData.get("last_name") as string)?.trim();
             const email = (formData.get("email") as string)?.trim();
             const password = formData.get("password") as string;
+            const confirmPassword = formData.get("confirm_password") as string;
             const website = (formData.get("website") as string) || undefined;
+
+            if (!password || password.length < 8) {
+                setPasswordError("Password must be at least 8 characters long.");
+                setIsLoading(false);
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                setPasswordError("Passwords do not match.");
+                setIsLoading(false);
+                return;
+            }
 
             const full_name = [firstName, lastName].filter(Boolean).join(" ") || undefined;
 
@@ -100,6 +115,15 @@ export const SignupSplitCarousel = () => {
                                   name="password"
                                   placeholder="Create a password"
                                   size="md"
+                                  hint="Minimum 8 characters; avoid reusing old passwords."
+                                />
+                                <Input
+                                  isRequired
+                                  label="Confirm password"
+                                  type="password"
+                                  name="confirm_password"
+                                  placeholder="Re-enter your password"
+                                  size="md"
                                 />
                                 {/* Honeypot field - hidden from users but visible to bots */}
                                 <input
@@ -137,6 +161,7 @@ export const SignupSplitCarousel = () => {
                                 />
                             </div>
 
+                            {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
                             {error && <p className="text-sm text-red-500">{error}</p>}
 
                             <div className="flex flex-col gap-4">

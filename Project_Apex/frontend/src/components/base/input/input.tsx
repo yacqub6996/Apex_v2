@@ -1,5 +1,5 @@
-import { type ReactNode, type Ref, createContext, useContext } from "react";
-import { Help, Info } from "@mui/icons-material";
+import { type ReactNode, type Ref, createContext, useContext, useState } from "react";
+import { Help, Info, Visibility, VisibilityOff } from "@mui/icons-material";
 import type { InputProps as AriaInputProps, TextFieldProps as AriaTextFieldProps } from "react-aria-components";
 import { Group as AriaGroup, Input as AriaInput, TextField as AriaTextField } from "react-aria-components";
 import { HintText } from "@/components/base/input/hint-text";
@@ -27,6 +27,12 @@ export interface InputBaseProps extends TextFieldProps {
     tooltipClassName?: string;
     /** Keyboard shortcut to display. */
     shortcut?: string | boolean;
+    /** Enable show/hide password toggle for password fields. */
+    showPasswordToggle?: boolean;
+    /** Current visibility state for password fields. */
+    passwordVisible?: boolean;
+    /** Handler for toggling password visibility. */
+    onTogglePasswordVisibility?: () => void;
     ref?: Ref<HTMLInputElement>;
     groupRef?: Ref<HTMLDivElement>;
     /** Icon component to display on the left side of the input. */
@@ -47,12 +53,15 @@ export const InputBase = ({
     tooltipClassName,
     inputClassName,
     iconClassName,
+    showPasswordToggle,
+    passwordVisible,
+    onTogglePasswordVisibility,
     // Omit this prop to avoid invalid HTML attribute warning
     isRequired: _isRequired,
     ...inputProps
 }: Omit<InputBaseProps, "label" | "hint">) => {
     // Check if the input has a leading icon or tooltip
-    const hasTrailingIcon = tooltip || isInvalid;
+    const hasTrailingIcon = tooltip || isInvalid || showPasswordToggle;
     const hasLeadingIcon = Icon;
 
     // If the input is inside a `TextFieldContext`, use its context to simplify applying styles
@@ -157,6 +166,26 @@ export const InputBase = ({
                 />
             )}
 
+            {/* Password visibility toggle */}
+            {showPasswordToggle && (
+                <button
+                    type="button"
+                    onClick={onTogglePasswordVisibility}
+                    className={cx(
+                        "absolute flex items-center justify-center rounded-full text-fg-quaternary transition duration-150 hover:text-fg-quaternary_hover focus:outline-none",
+                        sizes[inputSize].iconTrailing,
+                        isDisabled && "text-fg-disabled cursor-not-allowed",
+                    )}
+                    aria-label={passwordVisible ? "Hide password" : "Show password"}
+                >
+                    {passwordVisible ? (
+                        <VisibilityOff className="size-4" />
+                    ) : (
+                        <Visibility className="size-4" />
+                    )}
+                </button>
+            )}
+
             {/* Shortcut */}
             {shortcut && (
                 <div
@@ -235,8 +264,12 @@ export const Input = ({
     inputClassName,
     wrapperClassName,
     tooltipClassName,
+    type,
     ...props
 }: InputProps) => {
+    const [passwordVisible, setPasswordVisible] = useState(false);
+    const isPasswordField = type === "password";
+
     return (
         <TextField aria-label={!label ? placeholder : undefined} {...props} className={className}>
             {({ isRequired, isInvalid }) => (
@@ -256,6 +289,10 @@ export const Input = ({
                             wrapperClassName,
                             tooltipClassName,
                             tooltip,
+                            type: isPasswordField && passwordVisible ? "text" : type,
+                            showPasswordToggle: isPasswordField,
+                            passwordVisible: isPasswordField ? passwordVisible : undefined,
+                            onTogglePasswordVisibility: isPasswordField ? () => setPasswordVisible((v) => !v) : undefined,
                         }}
                     />
 
