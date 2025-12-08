@@ -79,7 +79,8 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
-            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
+            mkdir -p ${DEPLOY_DIR}
             rm -rf ${DEPLOY_DIR}/*
 
       - name: Upload frontend build to VPS
@@ -89,7 +90,7 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           source: "Project_Apex/frontend/dist/*"
-          target: "/home/apex-portfolios.org/public_html"
+          target: "/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
 
       - name: Fix permissions on CyberPanel
         uses: appleboy/ssh-action@v1.0.3
@@ -98,6 +99,6 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
-            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html/Project_Apex/frontend/dist"
             SYSTEM_USER="apexp9890"
             chown -R $SYSTEM_USER:$SYSTEM_USER $DEPLOY_DIR
