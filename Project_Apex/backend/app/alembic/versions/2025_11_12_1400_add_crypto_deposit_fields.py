@@ -17,9 +17,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add crypto-specific fields to transactions table (skip crypto_address as it already exists)
+    # Ensure crypto_address column exists on all environments.
+    # Some early databases were created without this column, so we add it defensively.
+    op.execute("ALTER TABLE transaction ADD COLUMN IF NOT EXISTS crypto_address VARCHAR(100)")
+
+    # Add remaining crypto-specific fields to transactions table.
     op.add_column('transaction', sa.Column('crypto_network', sa.String(length=50), nullable=True))
-    # crypto_address already exists, skip it
     op.add_column('transaction', sa.Column('crypto_coin', sa.String(length=20), nullable=True))
     op.add_column('transaction', sa.Column('crypto_amount', sa.String(length=50), nullable=True))
     op.add_column('transaction', sa.Column('crypto_memo', sa.String(length=100), nullable=True))
