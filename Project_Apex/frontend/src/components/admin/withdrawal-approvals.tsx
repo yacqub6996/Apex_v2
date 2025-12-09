@@ -100,7 +100,7 @@ export const WithdrawalApprovals: React.FC = () => {
                 key={withdrawal.id}
                 className="rounded-xl border border-secondary p-4 hover:bg-secondary/50 transition-colors"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="flex items-start space-x-3 flex-1">
                     <Avatar
                       sx={{
@@ -130,11 +130,11 @@ export const WithdrawalApprovals: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="ml-4 text-right">
+                  <div className="sm:ml-4 sm:text-right">
                     <p className="mb-2 text-lg font-semibold text-primary">
                       {formatCurrency(withdrawal.amount)}
                     </p>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
                       <Button
                         size="small"
                         disabled={approveMutation.isPending || rejectMutation.isPending}
