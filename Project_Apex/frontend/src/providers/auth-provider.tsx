@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoginService } from '@/api/services/LoginService';
 import { UsersService } from '@/api/services/UsersService';
+import { ApiError } from '@/api/core/ApiError';
 import type { KycStatus } from '@/api/models/KycStatus';
 import {
   clearAccessToken,
@@ -284,7 +285,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const rawRole = ((token?.role as string) ?? 'user').toLowerCase();
       return rawRole === 'admin' ? 'admin' : 'user';
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Login failed';
+      let message = 'Login failed';
+      if (error instanceof ApiError) {
+        const detail = (error.body as any)?.detail as string | undefined;
+        if (error.status === 403 && detail) {
+          // Preserve backend guidance when email is not verified or access is forbidden.
+          message = detail;
+        } else if (error.status === 400 && detail) {
+          // Typically "Incorrect email or password"
+          message = detail;
+        } else {
+          message = detail ?? error.message ?? message;
+        }
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
       throw new Error(message);
     }
   }, [loginMutation]);

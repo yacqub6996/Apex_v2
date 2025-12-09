@@ -1,0 +1,277 @@
+project:
+  name: "Apex Portfolios"
+  repo_root: "C:/Users/HP/Projects/Apex_v2"
+  frontend_path: "Project_Apex/frontend"
+  backend_path: "Project_Apex/backend"
+  deployment_notes: |
+    - Production runs on a Hostinger VPS using Docker (backend + Postgres) and LiteSpeed as the public web server.
+    - The backend API is exposed via Docker Compose and proxied by LiteSpeed under /api/.
+    - The frontend is a static Vite build served directly from /home/apex-portfolios.org/public_html.
+
+environments:
+  production:
+    domain: "https://apex-portfolios.org"
+    vps_host: "srv1141968.hstgr.cloud"
+    ssh_example: "ssh root@srv1141968.hstgr.cloud"
+    docker_compose_dir: "/home/apex-deployment"
+    web_root: "/home/apex-portfolios.org/public_html"
+    backend_container: "apex-deployment-backend-1"
+    db_container: "apex-deployment-db-1"
+    db:
+      name: "apex_db"
+      user: "apex_user"
+    env_highlights:
+      - "POSTGRES_SERVER=db"
+      - "POSTGRES_DB=apex_db"
+      - "POSTGRES_USER=apex_user"
+      - "POSTGRES_PASSWORD=<set in .env on VPS>"
+      - "DATABASE_URL=postgresql://apex_user:***@db:5432/apex_db"
+      - "SMTP_HOST=smtp.hostinger.com"
+      - "SMTP_PORT=587"
+      - "SMTP_TLS=true"
+      - "SMTP_USER=support@apex-portfolios.org"
+      - "EMAILS_FROM_EMAIL=support@apex-portfolios.org"
+      - "FRONTEND_HOST=https://www.apex-portfolios.org"
+
+ci_cd:
+  workflows:
+    - name: "deploy-backend"
+      file: ".github/workflows/deploy.yml"
+      notes: |
+        Builds the backend image, pushes to Docker Hub (cookiemaster69/apex-backend:latest),
+        and restarts the backend service on the VPS via SSH.
+    - name: "deploy-frontend"
+      file: ".github/workflows/deploy-production.yml"
+      notes: |
+        Builds the Vite frontend, SCPs the dist/ contents to the VPS, and rewrites
+        public_html (index.html + assets + images + favicon). Also runs a fix-permissions
+        step and (optionally) writes a .htaccess with SPA rules.
+  common_commands:
+    local:
+      - "cd Project_Apex/frontend && npm run build"
+      - "cd Project_Apex/backend && alembic upgrade heads  # for local DB"
+    vps:
+      - "cd /home/apex-deployment && docker ps"
+      - "cd /home/apex-deployment && docker logs --tail 100 apex-deployment-backend-1"
+      - "cd /home/apex-deployment && docker exec apex-deployment-backend-1 alembic upgrade heads"
+      - "cd /home/apex-deployment && docker exec -w /app apex-deployment-backend-1 python -m app.initial_data"
+      - "cd /home/apex-portfolios.org/public_html && ls -l"
+
+major_completed_work:
+  - id: "backend-migrations-stabilised"
+    summary: "Resolved broken Alembic history and long revision IDs; database schema now upgrades cleanly."
+    details: |
+      - Fixed multiple Alembic issues:
+        * Overly long revision IDs that exceeded alembic_version.version_num length.
+        * Duplicate ENUM type creation across migrations (e.g., notificationtype, copystatus).
+        * Branch merge conflicts in the revision graph.
+      - Normalised revision IDs and updated downstream references to shortened IDs.
+      - Ensured enums are created once and later migrations use create_type=False or ALTER TYPE.
+      - alembic upgrade heads now runs successfully on the production DB.
+    status: "done"
+
+  - id: "backend-deployment-docker-compose"
+    summary: "Backend FastAPI app and Postgres run under Docker Compose, reachable via LiteSpeed proxy."
+    details: |
+      - docker-compose.yml under /home/apex-deployment defines:
+        * service db: postgres:15-alpine with env from .env and a few tuning flags.
+        * service backend: cookiemaster69/apex-backend:latest, mapped to host port 8000.
+      - LiteSpeed vhost for apex-portfolios.org has:
+        * extprocessor 127.0.0.1:8000 as proxy.
+        * context /api/ { type proxy; handler 127.0.0.1:8000 }.
+      - Reverse proxy rules for /api/ in .htaccess have been tested and work.
+    status: "done"
+
+  - id: "smtp-configured-and-verified"
+    summary: "SMTP via Hostinger is configured and working for test and transactional emails."
+    details: |
+      - SMTP env vars are set inside the backend container (SMTP_HOST, SMTP_PORT=587, SMTP_TLS=true).
+      - Test endpoint /api/v1/utils/test-email/ sends mail successfully.
+      - Email verification flow:
+        * New users receive verification emails with working links.
+        * Login endpoint enforces email verification, returning a clear error if not verified.
+    status: "done"
+
+  - id: "password-reset-flow"
+    summary: "Backend generates password reset tokens and sends reset links; frontend shows confirmation messaging."
+    details: |
+      - Implemented password reset request endpoint and email dispatch (Apex-branded HTML email).
+      - Reset links sent to users include a token query parameter; frontend consumes token via a /auth/reset-like route.
+      - The reset request confirmation page text was updated to remove 'manual review' language and use:
+        'If an account exists, you’ll receive a reset link shortly.'
+      - Frontend text change is deployed once the SPA build is correctly synced to public_html.
+    status: "done-but-requires-redeploy-verification"
+
+  - id: "email-verification-flow"
+    summary: "Signup + email verification is required before login; UI and backend both enforce it."
+    details: |
+      - On signup, users receive a verification email with a link pointing at FRONTEND_HOST.
+      - Backend login returns 403 with detail 'Email not verified. Please check your inbox...' if not verified.
+      - Frontend displays a clear error and prevents access to authenticated routes until verified.
+    status: "done"
+
+  - id: "frontend-static-hosting-litespeed"
+    summary: "Vite build is served by LiteSpeed from /home/apex-portfolios.org/public_html."
+    details: |
+      - dist/index.html → /home/apex-portfolios.org/public_html/index.html.
+      - dist/assets → /home/apex-portfolios.org/public_html/assets.
+      - dist/images → /home/apex-portfolios.org/public_html/images.
+      - Favicon files copied into public_html.
+      - Directory and file permissions fixed:
+        * chmod 711 /home/apex-portfolios.org
+        * chmod 755 /home/apex-portfolios.org/public_html{,/assets,/images}
+        * find /home/apex-portfolios.org/public_html -type f -exec chmod 644 {} \;
+      - After applying these, LiteSpeed returns HTTP 200 with the SPA HTML.
+    status: "done-but-fragile"
+
+  - id: "admin-delete-user-ui"
+    summary: "Admin users can delete other users from the Users Directory."
+    details: |
+      - Backend already had DELETE /api/v1/users/{user_id} guarded by get_current_active_superuser.
+      - New frontend behaviour:
+        * src/components/dashboard/users-list.tsx:
+          - Added onDeleteUser?: (user: UserPublic) => void.
+          - Adds a 'Delete' button in the Actions column when callback is provided.
+        * src/pages/admin/users-directory.tsx:
+          - Tracks userToDelete and opens an MUI Dialog for confirmation.
+          - Uses UsersService.usersDeleteUser(user.id) to perform deletion.
+          - Shows react-toastify success/error messages.
+          - Invalidates ['admin-users'] and ['admin-users-count'] query keys post delete.
+          - Prevents deleting the currently logged-in admin (toast + backend 403 guard).
+      - Current caveat:
+        * Delete throws if the DB schema is missing transaction.crypto_address (see open thread `db-column-crypto-address`).
+    status: "implemented-but-blocked-by-db-schema"
+
+  - id: "admin-kyc-review-detail-routing"
+    summary: "KYC review list links to detailed KYC review screen for each user."
+    details: |
+      - Route definitions:
+        * /admin/kyc-review → KycReview page (pending KYC applications list).
+        * /admin/kyc-review/$userId → KycReviewDetail page (full application + documents).
+      - src/pages/admin/kyc-review.tsx:
+        * 'View Details' button now wrapped in a TanStack <Link>:
+          - to=\"/admin/kyc-review/$userId\"
+          - params={{ userId: application.user_id }}
+      - src/pages/admin/kyc-review-detail.tsx:
+        * Reads userId via useParams({ from: '/admin/kyc-review/$userId' }).
+      - Local build now compiles cleanly.
+      - Production behaviour still needs verification once frontend deploys without 404 regressions.
+    status: "done-locally-pending-prod-verification"
+
+open_threads:
+  - id: "frontend-404-after-deploy"
+    title: "Frontend deploy occasionally leaves site at LiteSpeed default 404"
+    impact: "High – breaks public site until manual fix"
+    current_behaviour: |
+      - After a successful GitHub Actions deploy-frontend run, visiting https://apex-portfolios.org sometimes shows the LiteSpeed default 404 page.
+      - Manual steps to restore:
+        * SSH to VPS.
+        * Re-copy Project_Apex/frontend/dist (index.html, assets/, images/, favicons) into /home/apex-portfolios.org/public_html.
+        * Re-apply directory/file permissions.
+      - curl -ik https://apex-portfolios.org/ then returns HTTP 200 with correct SPA HTML.
+    suspected_causes: |
+      - The deploy-frontend workflow may be:
+        * Removing or recreating public_html incorrectly (timing or rsync/ssh action issues).
+        * Applying too strict permissions before LiteSpeed reloads.
+      - There was at least one i/o timeout in 'Clear existing frontend on VPS' in the SSH action.
+    suggested_next_steps:
+      - [ ] Inspect `.github/workflows/deploy-production.yml`:
+        * Confirm rsync / scp paths: the dist build must land in /home/apex-portfolios.org/public_html (not in the Project_Apex subfolder only).
+        * Ensure we do not delete public_html itself or ACME directories (.well-known/acme-challenge).
+      - [ ] Add a post-deploy SSH step that:
+        * Runs `ls -l /home/apex-portfolios.org/public_html`.
+        * Runs `curl -ik https://apex-portfolios.org/ -H "Host: apex-portfolios.org"` and fails the workflow if status != 200.
+      - [ ] If the 404 reoccurs, collect LiteSpeed access/error logs around deploy time and confirm which vhost and context serve the 404.
+
+  - id: "db-column-crypto-address"
+    title: "Missing transaction.crypto_address column causes errors on delete and other transaction queries"
+    impact: "Medium – affects user deletion and any code path that loads transactions with crypto fields"
+    current_behaviour: |
+      - Model Transaction in backend/app/models.py defines crypto_address as an optional string column.
+      - Migration 2025_11_12_1400_add_crypto_deposit_fields.py previously assumed crypto_address already existed and did not create it.
+      - On production, the column transaction.crypto_address is missing; queries fail with:
+        psycopg.errors.UndefinedColumn: column transaction.crypto_address does not exist
+    changes_made: |
+      - The migration 2025_11_12_1400_add_crypto_deposit_fields.py was updated to:
+        op.execute("ALTER TABLE transaction ADD COLUMN IF NOT EXISTS crypto_address VARCHAR(100)")
+        before adding other crypto-specific fields.
+      - This ensures any future environments will have the column.
+    required_manual_fix_on_prod:
+      - [ ] Run once on the VPS DB:
+        - ssh root@srv1141968.hstgr.cloud
+        - cd /home/apex-deployment
+        - docker exec -it apex-deployment-db-1 psql -U apex_user -d apex_db \
+            -c 'ALTER TABLE "transaction" ADD COLUMN IF NOT EXISTS crypto_address VARCHAR(100);'
+      - [ ] Afterward test:
+        - Delete a user with transactions via admin UI.
+        - Hit any endpoints that load transactions for that user.
+      - [ ] If errors persist, check for other crypto_* columns and reconcile against models.py.
+
+  - id: "ai-chat-widget-mobile-layout"
+    title: "AI support assistant widget layout issues on mobile"
+    impact: "Low-medium – cosmetic but affects UX on landing/support pages"
+    current_behaviour: |
+      - On mobile, the AI chat/support widget panel covers large portions of the screen and does not respect expected margins.
+      - Screenshot shows the chat header pinned near the top with excess empty space.
+    suspected_causes: |
+      - The support widget is likely absolutely positioned with fixed width/height tuned for desktop, not mobile.
+      - Overflow/height calculations may not consider mobile viewport height and the fixed bottom navigation.
+    suggested_next_steps:
+      - [ ] Inspect components under src/components/support-widget and src/components/support.
+      - [ ] Add responsive layout rules:
+        * On small breakpoints, make the widget full-width and height minus header/footer, with internal scroll.
+        * Ensure z-index and position are compatible with other fixed headers.
+      - [ ] Add a simple Cypress/Playwright visual check or manual checklist for mobile breakpoints.
+
+  - id: "landing-videos-not-playing"
+    title: "Marketing videos do not play on landing/sign-in/signup screens"
+    impact: "Low – visual polish / marketing only, does not affect core flows"
+    current_behaviour: |
+      - User reported that no videos are playing on landing and auth pages.
+      - Exact component and asset paths not yet inspected in this session.
+    suggested_next_steps:
+      - [ ] Search for video-related components in frontend (likely under src/components/marketing or similar).
+      - [ ] Confirm:
+        * Video file paths in dist/ exist and are correctly copied to public_html.
+        * Autoplay/muted/loop attributes comply with modern browser policies (especially on mobile).
+        * Any lazy-loading or intersection observers are functioning.
+      - [ ] Collect console/network logs from the landing page if videos still fail to load.
+
+  - id: "password-reset-link-routing"
+    title: "Password reset link 404 and template polishing"
+    impact: "Medium – affects ability for users to reset passwords"
+    current_behaviour: |
+      - Email currently sends a link like:
+        https://www.apex-portfolios.org/reset-password?token=<JWT>
+      - There was a 404 when following the link; the frontend route expects /auth/reset or a different path.
+      - The reset confirmation page copy has been updated in the code but may not yet be visible in production due to deploy issues.
+    suggested_next_steps:
+      - [ ] Confirm the actual frontend route configured for password reset (e.g., /auth/reset vs /reset-password).
+      - [ ] Align the backend email template to match that path.
+      - [ ] After resolving the frontend 404 deploy issue, test:
+        * Request password reset.
+        * Click link from email on both desktop and mobile.
+        * Complete reset and log in with the new password.
+
+  - id: "kyc-review-view-details-production"
+    title: "KYC 'View Details' button wired correctly in code but needs production verification"
+    impact: "Medium – affects admin KYC review workflow"
+    current_behaviour: |
+      - Locally, the 'View Details' button navigates using a TanStack <Link> wrapper to /admin/kyc-review/$userId.
+      - In earlier production usage, the button appeared unresponsive (likely due to routing mismatch or stale build).
+    suggested_next_steps:
+      - [ ] Once frontend deploy is stable (no 404), log in as admin in production:
+        * Go to Admin → KYC Review.
+        * Click 'View Details' on a pending application.
+        * Confirm navigation to /admin/kyc-review/<userId> and that documents load.
+      - [ ] If it still fails:
+        * Capture console errors and network requests from the browser devtools.
+        * Verify that the route /admin/kyc-review/$userId is present in the TanStack route tree (see devtools or compiled routes).
+
+notes_for_future_devs_and_agents:
+  - "Use docs/ci-cd-cheatsheet.md for concrete commands (SSH, Docker, Alembic, LiteSpeed checks)."
+  - "When changing Alembic revisions, always ensure down_revision chains match and avoid re-creating ENUMs that already exist."
+  - "The production environment is somewhat brittle around frontend deploys; validate / via curl after any change and be ready to apply the manual static-file hotfix."
+  - "Whenever you change auth, password reset, or email flows, test them end-to-end with real emails from the production-like environment."
+  - "For any destructive admin action (delete user, adjust balances, ROI pushes), verify permissions and caching (React Query) so the UI stays in sync with backend state."
+

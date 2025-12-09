@@ -44,13 +44,18 @@ export const LoginSplitCarousel = () => {
             toast.success("Logged in successfully");
             setTimeout(() => router.navigate({ to: destination }), 400);
         } catch (error) {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "We couldn't sign you in. Please check your details and try again.";
+
             // Use sessionStorage instead of localStorage for transient error state
             try {
                 window.sessionStorage.setItem("apex_login_error", "1");
             } catch {
                 // ignore storage issues
             }
-            setError("We couldn't sign you in. If you don't have an account yet, please sign up.");
+            setError(message);
         }
     };
 
@@ -183,4 +188,3 @@ export const LoginSplitCarousel = () => {
         </>
     );
 };
-

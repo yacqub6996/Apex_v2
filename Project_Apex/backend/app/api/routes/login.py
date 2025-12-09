@@ -334,6 +334,11 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
         raise HTTPException(status_code=400, detail="Inactive user")
     hashed_password = get_password_hash(password=body.new_password)
     user.hashed_password = hashed_password
+    # If the user can complete a password reset via email,
+    # we can safely treat their email as verified.
+    if not user.email_verified:
+        user.email_verified = True
+        user.email_verified_at = utc_now()
     session.add(user)
     try:
         session.commit()
