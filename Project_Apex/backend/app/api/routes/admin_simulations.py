@@ -382,20 +382,15 @@ async def approve_withdrawal(
         session.add(user)
         event_payload_extra["source_wallet"] = "copy_trading_wallet"
     elif source_value == WithdrawalSource.LONG_TERM_WALLET.value:
-        # Ensure long term wallet
+        # Long-term wallet withdrawals reserve funds at request time by
+        # debiting the long_term_wallet balance immediately. At approval
+        # we only credit the main wallet to avoid double-deducting.
         session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
         wallet = user.long_term_wallet
-        wallet_balance = float(wallet.balance) if wallet and wallet.balance is not None else 0.0
-        if transaction.amount > wallet_balance:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient long-term wallet balance. Available: ${wallet_balance:.2f}",
-            )
         if wallet is None:
             raise HTTPException(status_code=400, detail="Long-term wallet not initialized")
-        wallet.balance = round(float(wallet.balance or 0.0) - transaction.amount, 2)
+
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
-        session.add(wallet)
         session.add(user)
         event_payload_extra["source_wallet"] = "long_term_wallet"
     elif source_value == WithdrawalSource.ACTIVE_ALLOCATION.value:
