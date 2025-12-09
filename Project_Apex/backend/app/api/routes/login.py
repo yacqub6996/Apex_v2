@@ -26,6 +26,7 @@ from app.utils import (
 )
 import secrets
 from app.services.notification_service import email_new_device_login
+from app.services.email_sender import send_welcome_email
 
 # Optional Google ID token verification
 try:
@@ -414,4 +415,13 @@ def verify_email(session: SessionDep, body: EmailVerificationToken) -> Message:
         session.rollback()
         logger.exception("Failed to verify email", extra={"user_id": str(user.id)})
         raise HTTPException(status_code=500, detail="Verification failed. Please try again.")
+    # Send a one-time welcome email after successful verification.
+    try:
+        send_welcome_email(email=user.email, name=user.full_name)
+    except Exception:
+        logger.warning(
+            "welcome_email_failed",
+            exc_info=True,
+            extra={"user_id": str(user.id)},
+        )
     return Message(message="Email verified successfully")

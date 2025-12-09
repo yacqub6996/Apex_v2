@@ -5,7 +5,7 @@ import { Input } from "@/components/base/input/input";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { UntitledLogo } from "@/components/foundations/logo/untitledui-logo";
 import { UntitledLogoMinimal } from "@/components/foundations/logo/untitledui-logo-minimal";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "@/providers/enhanced-toast-provider";
 import { useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/providers/auth-provider";
@@ -15,20 +15,6 @@ export const LoginSplitCarousel = () => {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const { login, isLoading } = useAuth();
-
-    // Use sessionStorage instead of localStorage for login errors
-    // This ensures errors disappear when user closes tab or refreshes
-    useEffect(() => {
-        try {
-            const flag = window.sessionStorage.getItem("apex_login_error");
-            if (flag) {
-                setError("We couldn't sign you in. If you don't have an account yet, please sign up.");
-                window.sessionStorage.removeItem("apex_login_error");
-            }
-        } catch {
-            // ignore storage access issues
-        }
-    }, []);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -49,12 +35,6 @@ export const LoginSplitCarousel = () => {
                     ? error.message
                     : "We couldn't sign you in. Please check your details and try again.";
 
-            // Use sessionStorage instead of localStorage for transient error state
-            try {
-                window.sessionStorage.setItem("apex_login_error", "1");
-            } catch {
-                // ignore storage issues
-            }
             setError(message);
         }
     };
@@ -98,12 +78,24 @@ export const LoginSplitCarousel = () => {
                                 {error && (
                                     <div className="flex flex-col gap-2 rounded-md bg-red-50 border border-red-200 p-3">
                                         <p className="text-sm text-red-700">{error}</p>
-                                        <div className="text-sm">
-                                            <Button href="/signup" size="sm" color="link-color">
-                                                Sign up
-                                            </Button>
-                                            <span className="text-tertiary"> to create a new account.</span>
-                                        </div>
+                                        {error.toLowerCase().includes("email not verified") ? (
+                                            <div className="mt-1 flex flex-col gap-1 text-sm">
+                                                <Button href="/verify-email" size="sm" color="link-color">
+                                                    Open verification page
+                                                </Button>
+                                                <span className="text-tertiary">
+                                                    Check your inbox for the verification link. After verifying, you can log in
+                                                    with your email and password.
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm">
+                                                <Button href="/signup" size="sm" color="link-color">
+                                                    Sign up
+                                                </Button>
+                                                <span className="text-tertiary"> to create a new account.</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
