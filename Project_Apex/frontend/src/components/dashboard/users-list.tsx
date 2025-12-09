@@ -13,9 +13,10 @@ const formatCurrency = (value?: number) =>
 export interface UsersListProps {
   limit?: number; // preview mode when provided
   onInspectKyc?: (user: UserPublic) => void;
+  onDeleteUser?: (user: UserPublic) => void;
 }
 
-export const UsersList = ({ limit, onInspectKyc }: UsersListProps) => {
+export const UsersList = ({ limit, onInspectKyc, onDeleteUser }: UsersListProps) => {
   const usersQuery = useQuery({
     queryKey: ["admin-users", { limit }],
     queryFn: () => UsersService.usersReadUsers(0, limit ?? 100),
@@ -51,7 +52,7 @@ export const UsersList = ({ limit, onInspectKyc }: UsersListProps) => {
             <TableCell sx={{ fontSize: 12, textTransform: "uppercase", color: "text.secondary" }}>KYC</TableCell>
             <TableCell sx={{ fontSize: 12, textTransform: "uppercase", color: "text.secondary" }}>Balances</TableCell>
             <TableCell sx={{ fontSize: 12, textTransform: "uppercase", color: "text.secondary" }}>Last Login</TableCell>
-            {onInspectKyc && (
+            {(onInspectKyc || onDeleteUser) && (
               <TableCell sx={{ fontSize: 12, textTransform: "uppercase", color: "text.secondary" }}>Actions</TableCell>
             )}
           </TableRow>
@@ -100,11 +101,25 @@ export const UsersList = ({ limit, onInspectKyc }: UsersListProps) => {
                 <TableCell>
                   <Typography variant="caption" color="text.secondary">{formatDateTime(user.last_login_at)}</Typography>
                 </TableCell>
-                {onInspectKyc && (
+                {(onInspectKyc || onDeleteUser) && (
                   <TableCell>
-                    <Button variant="outlined" size="small" onClick={() => onInspectKyc(user)}>
-                      Inspect KYC
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      {onInspectKyc && (
+                        <Button variant="outlined" size="small" onClick={() => onInspectKyc(user)}>
+                          Inspect KYC
+                        </Button>
+                      )}
+                      {onDeleteUser && (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          onClick={() => onDeleteUser(user)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Stack>
                   </TableCell>
                 )}
               </TableRow>
