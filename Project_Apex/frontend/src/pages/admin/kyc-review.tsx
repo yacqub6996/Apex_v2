@@ -107,15 +107,19 @@ export const KycReview = () => {
                     >
                       Reject
                     </Button>
-                    <Button 
-                      size="small" 
-                      variant="outlined" 
-                      component={Link} 
-                      to={`/admin/kyc-review/${application.user_id}`}
-                      sx={{ minHeight: 44, width: { xs: '100%', sm: 'auto' } }}
+                    <Link
+                      to="/admin/kyc-review/$userId"
+                      params={{ userId: application.user_id }}
+                      style={{ textDecoration: 'none', width: '100%' }}
                     >
-                      View Details
-                    </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{ minHeight: 44, width: { xs: '100%', sm: 'auto' } }}
+                      >
+                        View Details
+                      </Button>
+                    </Link>
                   </Stack>
                 </Stack>
                 
