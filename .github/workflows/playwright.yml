@@ -29,10 +29,10 @@ jobs:
       with:
         filters: |
           changed:
-            - backend/**
-            - frontend/**
-            - .env
-            - docker-compose*.yml
+            - Project_Apex/backend/**
+            - Project_Apex/frontend/**
+            - Project_Apex/.env
+            - Project_Apex/docker-compose*.yml
             - .github/workflows/playwright.yml
 
   test-playwright:
@@ -41,6 +41,9 @@ jobs:
     if: ${{ needs.changes.outputs.changed == 'true' }}
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Project_Apex
     strategy:
       matrix:
         shardIndex: [1, 2, 3, 4]
@@ -65,23 +68,23 @@ jobs:
         version: "0.4.15"
         enable-cache: true
     - run: uv sync
-      working-directory: backend
+      working-directory: Project_Apex/backend
     - run: npm ci
-      working-directory: frontend
+      working-directory: Project_Apex/frontend
     - run: uv run bash frontend/scripts/generate-client.sh
       env:
-        VIRTUAL_ENV: backend/.venv
+        VIRTUAL_ENV: Project_Apex/backend/.venv
     - run: docker compose build
     - run: docker compose down -v --remove-orphans
     - name: Run Playwright tests
-      run: docker compose run --rm playwright npx playwright test --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      run: docker compose run --rm playwright npx playwright test --reporter=blob --fail-on-flaky-tests --trace=retain-on-failure --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
     - run: docker compose down -v --remove-orphans
     - name: Upload blob report to GitHub Actions Artifacts
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4
       with:
         name: blob-report-${{ matrix.shardIndex }}
-        path: frontend/blob-report
+        path: Project_Apex/frontend/blob-report
         include-hidden-files: true
         retention-days: 1
 
@@ -92,6 +95,9 @@ jobs:
     # Merge reports after playwright-tests, even if some shards have failed
     if: ${{ !cancelled() && needs.changes.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Project_Apex
     steps:
     - uses: actions/checkout@v5
     - uses: actions/setup-node@v5
@@ -99,21 +105,21 @@ jobs:
         node-version: 20
     - name: Install dependencies
       run: npm ci
-      working-directory: frontend
+      working-directory: Project_Apex/frontend
     - name: Download blob reports from GitHub Actions Artifacts
       uses: actions/download-artifact@v5
       with:
-        path: frontend/all-blob-reports
+        path: Project_Apex/frontend/all-blob-reports
         pattern: blob-report-*
         merge-multiple: true
     - name: Merge into HTML Report
       run: npx playwright merge-reports --reporter html ./all-blob-reports
-      working-directory: frontend
+      working-directory: Project_Apex/frontend
     - name: Upload HTML report
       uses: actions/upload-artifact@v4
       with:
         name: html-report--attempt-${{ github.run_attempt }}
-        path: frontend/playwright-report
+        path: Project_Apex/frontend/playwright-report
         retention-days: 30
         include-hidden-files: true
 

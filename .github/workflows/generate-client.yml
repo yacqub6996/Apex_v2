@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Project_Apex
     steps:
     # For PRs from forks
     - uses: actions/checkout@v5
@@ -19,7 +22,7 @@ jobs:
       if: ( github.event_name != 'pull_request' || github.secret_source == 'Actions' )
       with:
         ref: ${{ github.head_ref }}
-        token: ${{ secrets.FULL_STACK_FASTAPI_TEMPLATE_REPO_TOKEN }}
+        token: ${{ github.token }}
     - uses: actions/setup-node@v5
       with:
         node-version: lts/*
@@ -33,12 +36,12 @@ jobs:
         enable-cache: true
     - name: Install dependencies
       run: npm ci
-      working-directory: frontend
+      working-directory: Project_Apex/frontend
     - run: uv sync
-      working-directory: backend
+      working-directory: Project_Apex/backend
     - run: uv run bash frontend/scripts/generate-client.sh
       env:
-        VIRTUAL_ENV: backend/.venv
+        VIRTUAL_ENV: Project_Apex/backend/.venv
         SECRET_KEY: just-for-generating-client
         POSTGRES_PASSWORD: just-for-generating-client
         FIRST_SUPERUSER_PASSWORD: just-for-generating-client
@@ -46,7 +49,7 @@ jobs:
       run: |
         git config --local user.email "github-actions@github.com"
         git config --local user.name "github-actions"
-        git add frontend/src/client
+        git add Project_Apex/frontend/src/api
     # Same repo PRs
     - name: Push changes
       if: ( github.event_name != 'pull_request' || github.secret_source == 'Actions' )
