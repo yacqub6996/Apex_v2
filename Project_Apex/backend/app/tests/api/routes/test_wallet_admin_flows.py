@@ -184,6 +184,8 @@ def test_superuser_override_updates_wallet_balances_and_can_clear_accounts(
     db.refresh(user, attribute_names=["copy_trading_wallet"])
     assert user.copy_trading_wallet is not None
     assert float(user.copy_trading_wallet.balance) == 120.0
+    assert user.copy_trading_balance == 30.0
+    assert user.long_term_balance == 40.0
 
     long_term_override = client.post(
         f"{settings.API_V1_STR}/admin/ledger/balance/override",
@@ -199,6 +201,8 @@ def test_superuser_override_updates_wallet_balances_and_can_clear_accounts(
     db.refresh(user, attribute_names=["long_term_wallet"])
     assert user.long_term_wallet is not None
     assert float(user.long_term_wallet.balance) == 80.0
+    assert user.copy_trading_balance == 30.0
+    assert user.long_term_balance == 40.0
 
     clear_override = client.post(
         f"{settings.API_V1_STR}/admin/ledger/balance/override",
