@@ -51,7 +51,17 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
 
   const pendingQuery = useQuery({
     queryKey: ['pending-summary'],
-    queryFn: () => TransactionsService.transactionsGetPendingSummary(),
+    queryFn: async () => {
+      try {
+        return await TransactionsService.transactionsGetPendingSummary();
+      } catch {
+        return {
+          main_wallet_pending: 0,
+          copy_trading_wallet_pending: 0,
+          long_term_wallet_pending: 0,
+        };
+      }
+    },
     enabled: open,
   });
 
