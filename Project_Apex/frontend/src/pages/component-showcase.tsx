@@ -257,6 +257,7 @@ export const ComponentShowcase = () => {
                   value={statusFilter}
                   label="Status"
                   onChange={(e) => setStatusFilter(e.target.value)}
+                  SelectDisplayProps={{ id: "status-filter" }}
                 >
                   <MenuItem value="all">All</MenuItem>
                   <MenuItem value="Active">Active</MenuItem>
