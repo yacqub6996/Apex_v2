@@ -422,9 +422,9 @@ def override_user_balance(
     if request.balance_field == 'wallet':
         previous_value = target_user.wallet_balance or 0.0
     elif request.balance_field == 'copy_wallet':
-        previous_value = float(target_user.copy_trading_wallet_balance or 0.0)
+        previous_value = float(_ensure_copy_trading_wallet(session, target_user).balance or 0.0)
     elif request.balance_field == 'long_term_wallet':
-        previous_value = float(target_user.long_term_wallet_balance or 0.0)
+        previous_value = float(_ensure_long_term_wallet(session, target_user).balance or 0.0)
     elif request.balance_field == 'total':
         # Use computed total balance; hybrid_property is float at runtime
         previous_value = float(target_user.total_balance or 0.0)
