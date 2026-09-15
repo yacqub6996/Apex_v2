@@ -10,10 +10,15 @@ on:
 jobs:
   add-to-project:
     name: Add to project
-    if: ${{ github.repository_owner == 'fastapi' && secrets.PROJECTS_TOKEN != '' }}
+    if: ${{ github.repository_owner == 'fastapi' }}
     runs-on: ubuntu-latest
+    env:
+      PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
     steps:
-      - uses: actions/add-to-project@v1.0.2
+      - if: ${{ env.PROJECTS_TOKEN != '' }}
+        uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/orgs/fastapi/projects/2
-          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          github-token: ${{ env.PROJECTS_TOKEN }}
+      - if: ${{ env.PROJECTS_TOKEN == '' }}
+        run: echo "Skipping template project integration because PROJECTS_TOKEN is not configured."

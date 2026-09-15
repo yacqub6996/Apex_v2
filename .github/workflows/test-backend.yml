@@ -52,6 +52,16 @@ jobs:
           enable-cache: true
       - run: docker compose down -v --remove-orphans
       - run: docker compose up -d db mailcatcher
+      - name: Wait for database
+        run: |
+          for _ in $(seq 1 60); do
+            if docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Database did not become ready in time." >&2
+          exit 1
       - name: Migrate DB
         run: uv run bash scripts/prestart.sh
         working-directory: Project_Apex/backend

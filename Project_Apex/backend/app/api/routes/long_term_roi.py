@@ -10,12 +10,12 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.time import utc_now
 from app.models import (
     ExecutionEventType,
+    ROISource,
+    Transaction,
+    TransactionStatus,
+    TransactionType,
     User,
     UserRole,
-    Transaction,
-    TransactionType,
-    TransactionStatus,
-    ROISource,
 )
 from app.services.execution_events import record_execution_event
 from app.services.notification_service import notify_roi_received
@@ -57,8 +57,7 @@ async def push_long_term_roi(
     # Validate ROI percentage
     if abs(payload.roi_percent) > 1000:  # Limit to ±1000% for safety
         raise HTTPException(
-            status_code=400,
-            detail="ROI percentage must be between -1000% and +1000%"
+            status_code=400, detail="ROI percentage must be between -1000% and +1000%"
         )
 
     # Get user and validate
@@ -70,7 +69,7 @@ async def push_long_term_roi(
     if payload.roi_percent < 0 and user.long_term_balance <= 0:
         raise HTTPException(
             status_code=400,
-            detail="User has insufficient long-term balance for negative ROI"
+            detail="User has insufficient long-term balance for negative ROI",
         )
 
     # Calculate ROI based on long-term balance
