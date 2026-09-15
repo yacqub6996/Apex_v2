@@ -22,6 +22,8 @@ from app.models import (
     AdminBalanceAdjustmentPublic,
     AdminBalanceAdjustmentsPublic,
     AdminActionType,
+    CopyTradingWallet,
+    LongTermWallet,
 )
 from app.core.time import utc_now
 
@@ -70,6 +72,28 @@ def require_admin(current_user: CurrentUser) -> None:
     """Verify user has admin role"""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
+
+
+def _ensure_copy_trading_wallet(session: SessionDep, user: User) -> CopyTradingWallet:
+    session.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
+    wallet = user.copy_trading_wallet
+    if wallet is None:
+        wallet = CopyTradingWallet(user_id=user.id, balance=0.0)
+        session.add(wallet)
+        session.flush()
+        user.copy_trading_wallet = wallet
+    return wallet
+
+
+def _ensure_long_term_wallet(session: SessionDep, user: User) -> LongTermWallet:
+    session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+    wallet = user.long_term_wallet
+    if wallet is None:
+        wallet = LongTermWallet(user_id=user.id, balance=0.0)
+        session.add(wallet)
+        session.flush()
+        user.long_term_wallet = wallet
+    return wallet
 
 
 # --- Admin Balance Adjustment Endpoints ---
@@ -398,9 +422,9 @@ def override_user_balance(
     if request.balance_field == 'wallet':
         previous_value = target_user.wallet_balance or 0.0
     elif request.balance_field == 'copy_wallet':
-        previous_value = target_user.copy_trading_wallet_balance or 0.0
+        previous_value = float(target_user.copy_trading_wallet_balance or 0.0)
     elif request.balance_field == 'long_term_wallet':
-        previous_value = target_user.long_term_wallet_balance or 0.0
+        previous_value = float(target_user.long_term_wallet_balance or 0.0)
     elif request.balance_field == 'total':
         # Use computed total balance; hybrid_property is float at runtime
         previous_value = float(target_user.total_balance or 0.0)
@@ -457,16 +481,28 @@ def override_user_balance(
         # Update user balance based on field
         if request.balance_field == 'wallet':
             target_user.wallet_balance = request.new_value
+            target_user.balance = request.new_value
         elif request.balance_field == 'copy_wallet':
-            target_user.copy_trading_wallet_balance = request.new_value
+            copy_wallet = _ensure_copy_trading_wallet(session, target_user)
+            copy_wallet.balance = request.new_value
+            session.add(copy_wallet)
         elif request.balance_field == 'long_term_wallet':
-            target_user.long_term_wallet_balance = request.new_value
+            long_term_wallet = _ensure_long_term_wallet(session, target_user)
+            long_term_wallet.balance = request.new_value
+            session.add(long_term_wallet)
         elif request.balance_field == 'total':
             # For total override, set wallet and zero others; total_balance remains hybrid/computed
             target_user.wallet_balance = request.new_value
+            target_user.balance = request.new_value
             # Underlying fields used by hybrid properties
             target_user.copy_trading_balance = 0.0
             target_user.long_term_balance = 0.0
+            copy_wallet = _ensure_copy_trading_wallet(session, target_user)
+            long_term_wallet = _ensure_long_term_wallet(session, target_user)
+            copy_wallet.balance = 0.0
+            long_term_wallet.balance = 0.0
+            session.add(copy_wallet)
+            session.add(long_term_wallet)
         
         session.add(target_user)
         

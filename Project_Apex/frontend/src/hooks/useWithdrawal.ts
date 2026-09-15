@@ -8,7 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCryptoRates, validateAddress } from '@/services/crypto'
 import type { Asset, NetworkKey } from '@/types/crypto'
 import { TransactionsService } from '@/api/services/TransactionsService'
-import { TransactionType, TransactionStatus } from '@/api'
+import { TransactionType, TransactionStatus, WithdrawalSource } from '@/api'
 
 interface WithdrawalFormData {
   asset: Asset
@@ -46,9 +46,12 @@ export function useWithdrawalFlow(options: UseWithdrawalFlowOptions = {}) {
       const cryptoAmount = (data.amountUsd / rate).toFixed(8).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
       
       // Determine withdrawal source based on wallet type
-      const withdrawalSource = walletType === 'copy' ? 'COPY_TRADING_WALLET' : 
-                               walletType === 'long-term' ? 'LONG_TERM_WALLET' : 
-                               'MAIN_WALLET'
+      const withdrawalSource =
+        walletType === 'copy'
+          ? WithdrawalSource.COPY_TRADING_WALLET
+          : walletType === 'long-term'
+          ? WithdrawalSource.LONG_TERM_WALLET
+          : WithdrawalSource.MAIN_WALLET
       
       // Note: TransactionCreate schema doesn't currently support crypto-specific fields (crypto_network, crypto_address, etc.)
       // These need to be added to the backend TransactionCreate model for proper structured storage
@@ -60,6 +63,7 @@ export function useWithdrawalFlow(options: UseWithdrawalFlowOptions = {}) {
         transaction_type: TransactionType.WITHDRAWAL,
         status: TransactionStatus.PENDING,
         description,
+        withdrawal_source: withdrawalSource,
       })
     },
     onSuccess: () => {

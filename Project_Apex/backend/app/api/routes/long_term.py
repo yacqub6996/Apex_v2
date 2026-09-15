@@ -538,7 +538,7 @@ async def transfer_long_term_wallet(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    main_balance = float(user.wallet_balance or 0.0)
+    main_balance = float(user.wallet_balance or user.balance or 0.0)
     if payload.amount > main_balance:
         raise HTTPException(status_code=400, detail="Insufficient main wallet balance.")
 
@@ -557,6 +557,7 @@ async def transfer_long_term_wallet(
     new_long = round(long_balance + payload.amount, 2)
 
     user.wallet_balance = new_main
+    user.balance = new_main
     user.long_term_wallet.balance = new_long
     session.add(user)
     session.add(user.long_term_wallet)

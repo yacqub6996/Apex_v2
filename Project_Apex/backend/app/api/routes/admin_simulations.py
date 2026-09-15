@@ -88,6 +88,15 @@ router = APIRouter(prefix="/admin/simulations", tags=["admin-simulations"])
 logger = logging.getLogger(__name__)
 
 
+def _resolve_withdrawal_source(transaction: Transaction) -> str:
+    src = getattr(transaction, "withdrawal_source", None)
+    if isinstance(src, WithdrawalSource):
+        return src.value
+    if isinstance(src, str) and src:
+        return src
+    return WithdrawalSource.MAIN_WALLET.value
+
+
 @router.post("/scenario", response_model=SimulationScenarioResponse)
 async def run_simulation_scenario(
     *,
@@ -291,13 +300,7 @@ def get_pending_withdrawals(
 
     pending_withdrawals = []
     for tx, user in results:
-        src = getattr(tx, "withdrawal_source", None)
-        if isinstance(src, WithdrawalSource):
-            src_value = src.value
-        elif isinstance(src, str):
-            src_value = src
-        else:
-            src_value = WithdrawalSource.ACTIVE_ALLOCATION.value
+        src_value = _resolve_withdrawal_source(tx)
 
         plan_name: str | None = None
         if tx.long_term_investment_id:
@@ -356,11 +359,7 @@ async def approve_withdrawal(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    src = getattr(transaction, 'withdrawal_source', None)
-    try:
-        source_value = src.value if src is not None else WithdrawalSource.ACTIVE_ALLOCATION.value
-    except Exception:
-        source_value = WithdrawalSource.ACTIVE_ALLOCATION.value
+    source_value = _resolve_withdrawal_source(transaction)
 
     event_payload_extra: dict[str, Any] = {}
 
@@ -368,16 +367,17 @@ async def approve_withdrawal(
         # Ensure wallet is loaded and has sufficient funds
         session.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
         wallet = user.copy_trading_wallet
-        wallet_balance = float(wallet.balance) if wallet and wallet.balance is not None else 0.0
+        if wallet is None:
+            raise HTTPException(status_code=400, detail="Copy trading wallet not initialized")
+        wallet_balance = float(wallet.balance or 0.0)
         if transaction.amount > wallet_balance:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient copy wallet balance. Available: ${wallet_balance:.2f}",
             )
-        if wallet is None:
-            raise HTTPException(status_code=400, detail="Copy trading wallet not initialized")
         wallet.balance = round(float(wallet.balance or 0.0) - transaction.amount, 2)
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
+        user.balance = user.wallet_balance
         session.add(wallet)
         session.add(user)
         event_payload_extra["source_wallet"] = "copy_trading_wallet"
@@ -391,6 +391,7 @@ async def approve_withdrawal(
             raise HTTPException(status_code=400, detail="Long-term wallet not initialized")
 
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
+        user.balance = user.wallet_balance
         session.add(user)
         event_payload_extra["source_wallet"] = "long_term_wallet"
     elif source_value == WithdrawalSource.ACTIVE_ALLOCATION.value:
@@ -417,6 +418,7 @@ async def approve_withdrawal(
         current_long_term_balance = float(user.long_term_balance or 0.0)
         user.long_term_balance = max(round(current_long_term_balance - transaction.amount, 2), 0.0)
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
+        user.balance = user.wallet_balance
         session.add(user)
 
         # Capture plan metadata for logging
@@ -437,16 +439,17 @@ async def approve_withdrawal(
             }
         )
     else:
-        # Legacy path: allocated copy_trading_balance
-        if transaction.amount > (user.copy_trading_balance or 0.0):
+        main_balance = float(user.wallet_balance or user.balance or 0.0)
+        if transaction.amount > main_balance:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient copy balance. Available: ${float(user.copy_trading_balance or 0.0):.2f}",
+                detail=f"Insufficient main wallet balance. Available: ${main_balance:.2f}",
             )
-        user.copy_trading_balance = round(float(user.copy_trading_balance or 0.0) - transaction.amount, 2)
-        user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
+        new_main_balance = round(main_balance - transaction.amount, 2)
+        user.wallet_balance = new_main_balance
+        user.balance = new_main_balance
         session.add(user)
-        event_payload_extra["source_wallet"] = "copy_trading_balance"
+        event_payload_extra["source_wallet"] = "main_wallet"
 
     # Update transaction status and record event
     try:
@@ -529,6 +532,20 @@ async def reject_withdrawal(
 
     # Update transaction status and record event
     try:
+        source_value = _resolve_withdrawal_source(transaction)
+        if source_value == WithdrawalSource.LONG_TERM_WALLET.value:
+            user = session.get(User, transaction.user_id)
+            if user is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+            wallet = user.long_term_wallet
+            if wallet is None:
+                raise HTTPException(status_code=400, detail="Long-term wallet not initialized")
+            wallet.balance = round(float(wallet.balance or 0.0) + transaction.amount, 2)
+            user.long_term_balance = round(float(user.long_term_balance or 0.0) + transaction.amount, 2)
+            session.add(wallet)
+            session.add(user)
+
         transaction.status = TransactionStatus.FAILED
         transaction.executed_at = utc_now()
         transaction.description = f"{transaction.description or 'Withdrawal'} - {safe_reason}"
@@ -543,6 +560,7 @@ async def reject_withdrawal(
                 "transaction_id": str(transaction.id),
                 "type": "withdrawal_rejection",
                 "reason": safe_reason,
+                "source": source_value,
             },
         )
 
