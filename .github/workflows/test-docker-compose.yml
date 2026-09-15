@@ -19,9 +19,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Create CI env file
+        run: |
+          cat <<'EOF' > .env
+          PROJECT_NAME=Apex Trading Platform
+          ENVIRONMENT=local
+          DOMAIN=localhost
+          FRONTEND_HOST=http://localhost:5173
+          BACKEND_CORS_ORIGINS=http://localhost:5173
+          POSTGRES_SERVER=db
+          POSTGRES_PORT=5432
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=just-for-ci
+          POSTGRES_DB=apex_ci
+          SECRET_KEY=just-for-ci-secret-key
+          FIRST_SUPERUSER=admin@example.com
+          FIRST_SUPERUSER_PASSWORD=just-for-ci-password
+          EMAILS_FROM_EMAIL=noreply@example.com
+          EMAILS_FROM_NAME=Apex Support
+          SMTP_HOST=mailcatcher
+          SMTP_PORT=1025
+          SMTP_TLS=false
+          DOCKER_USERNAME=local
+          EOF
       - run: docker compose build
       - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d --wait backend frontend adminer
+      - run: docker compose up -d --wait backend frontend
       - name: Test backend is up
         run: curl http://localhost:8000/api/v1/utils/health-check
       - name: Test frontend is up

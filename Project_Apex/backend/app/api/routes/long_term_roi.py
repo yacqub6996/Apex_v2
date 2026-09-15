@@ -23,14 +23,14 @@ from app.services.notification_service import notify_roi_received
 logger = logging.getLogger(__name__)
 
 
-class LongTermROIPushRequest(SQLModel):
+class LongTermExecutionPushRequest(SQLModel):
     user_id: uuid.UUID
     roi_percent: float
     symbol: str
     note: str | None = None
 
 
-class LongTermROIPushResponse(SQLModel):
+class LongTermExecutionPushResponse(SQLModel):
     success: bool
     message: str
     affected_users: int
@@ -41,13 +41,13 @@ class LongTermROIPushResponse(SQLModel):
 router = APIRouter(prefix="/admin/long-term-roi", tags=["admin-long-term-roi"])
 
 
-@router.post("/push", response_model=LongTermROIPushResponse)
+@router.post("/push", response_model=LongTermExecutionPushResponse)
 async def push_long_term_roi(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    payload: LongTermROIPushRequest,
-) -> LongTermROIPushResponse:
+    payload: LongTermExecutionPushRequest,
+) -> LongTermExecutionPushResponse:
     """
     Push a long-term ROI execution event to a specific user's long-term balance.
     """
@@ -129,7 +129,7 @@ async def push_long_term_roi(
     except Exception as exc:
         logger.warning("Failed to send long-term ROI notification", exc_info=exc)
 
-    return LongTermROIPushResponse(
+    return LongTermExecutionPushResponse(
         success=True,
         message=f"Long-term ROI execution pushed successfully for user {user.email}",
         affected_users=1,
@@ -140,7 +140,7 @@ async def push_long_term_roi(
 
 __all__ = [
     "router",
-    "LongTermROIPushRequest",
-    "LongTermROIPushResponse",
+    "LongTermExecutionPushRequest",
+    "LongTermExecutionPushResponse",
     "push_long_term_roi",
 ]

@@ -6,6 +6,7 @@
  * Types of notifications that can be sent to users
  */
 export enum NotificationType {
+    KYC_SUBMITTED = "KYC_SUBMITTED",
     KYC_APPROVED = "KYC_APPROVED",
     KYC_REJECTED = "KYC_REJECTED",
     WITHDRAWAL_APPROVED = "WITHDRAWAL_APPROVED",

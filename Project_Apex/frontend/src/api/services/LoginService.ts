@@ -84,8 +84,12 @@ export class LoginService {
     }
     /**
      * Request Password Reset
-     * Log a password reset request for manual processing (no email sent).
-     * Used when SMTP is not configured.
+     * Password reset entrypoint used by the frontend.
+     *
+     * Behaviour:
+     * - When email sending is configured, dispatch a standard reset email with a tokenised link.
+     * - Otherwise, log the request for manual processing.
+     * - Always return a generic success message to avoid user enumeration.
      * @param email
      * @returns Message Successful Response
      * @throws ApiError
@@ -94,6 +98,26 @@ export class LoginService {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/password-reset-request",
+            query: {
+                email: email,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Legacy Password Reset Request
+     * Backwards-compatible alias for older frontend builds that still call
+     * `/login/password-reset-request`. New clients should use `/password-reset-request`.
+     * @param email
+     * @returns Message Successful Response
+     * @throws ApiError
+     */
+    public static loginLegacyPasswordResetRequest(email: string): CancelablePromise<Message> {
+        return __request(OpenAPI, {
+            method: "POST",
+            url: "/api/v1/login/password-reset-request",
             query: {
                 email: email,
             },
