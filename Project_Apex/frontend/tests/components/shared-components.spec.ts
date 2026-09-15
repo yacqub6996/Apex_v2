@@ -39,9 +39,9 @@ test.describe('Component Showcase - Responsive Layout', () => {
     await page.goto('/component-showcase');
 
     // All content should be visible
-    await expect(page.getByText('Component Showcase')).toBeVisible();
-    await expect(page.getByText('Metric Cards')).toBeVisible();
-    await expect(page.getByText('Data Table with Filters')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Component Showcase' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Metric Cards' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Data Table with Filters' })).toBeVisible();
   });
 });
 
@@ -74,9 +74,9 @@ test.describe('DataTable - Browser Interactions', () => {
 
   test('should display table with data', async ({ page }) => {
     // Check table headers
-    await expect(page.getByText('Name')).toBeVisible();
-    await expect(page.getByText('Email')).toBeVisible();
-    await expect(page.getByText('Status')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Email' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
 
     // Check data rows
     await expect(page.getByText('John Doe')).toBeVisible();
@@ -96,7 +96,7 @@ test.describe('DataTable - Browser Interactions', () => {
 
   test('should filter data based on status dropdown', async ({ page }) => {
     // Open status dropdown
-    const statusSelect = page.getByRole('button', { name: /status/i });
+    const statusSelect = page.locator('#status-filter');
     await statusSelect.click();
     
     // Select "Inactive"
@@ -169,7 +169,7 @@ test.describe('FilterBar - Responsive Layout', () => {
     
     // All filter controls should be visible
     await expect(page.getByPlaceholder('Search by name or email')).toBeVisible();
-    await expect(page.getByRole('button', { name: /status/i })).toBeVisible();
+    await expect(page.locator('#status-filter')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Apply Filters' })).toBeVisible();
   });
 });

@@ -5,12 +5,18 @@ on:
     types:
     - opened
     - synchronize
+    paths:
+    - Project_Apex/backend/**
+    - Project_Apex/frontend/scripts/generate-client.sh
 
 jobs:
   generate-client:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Project_Apex
     steps:
     # For PRs from forks
     - uses: actions/checkout@v5
@@ -19,8 +25,31 @@ jobs:
       if: ( github.event_name != 'pull_request' || github.secret_source == 'Actions' )
       with:
         ref: ${{ github.head_ref }}
-        token: ${{ secrets.FULL_STACK_FASTAPI_TEMPLATE_REPO_TOKEN }}
-    - uses: actions/setup-node@v4
+        token: ${{ github.token }}
+    - name: Create CI env file
+      run: |
+        cat <<'EOF' > .env
+        PROJECT_NAME=Apex Trading Platform
+        ENVIRONMENT=local
+        DOMAIN=localhost
+        FRONTEND_HOST=http://localhost:5173
+        BACKEND_CORS_ORIGINS=http://localhost:5173
+        POSTGRES_SERVER=db
+        POSTGRES_PORT=5432
+        POSTGRES_USER=postgres
+        POSTGRES_PASSWORD=just-for-ci
+        POSTGRES_DB=apex_ci
+        SECRET_KEY=just-for-ci-secret-key
+        FIRST_SUPERUSER=admin@example.com
+        FIRST_SUPERUSER_PASSWORD=just-for-ci-password
+        EMAILS_FROM_EMAIL=noreply@example.com
+        EMAILS_FROM_NAME=Apex Support
+        SMTP_HOST=mailcatcher
+        SMTP_PORT=1025
+        SMTP_TLS=false
+        DOCKER_USERNAME=local
+        EOF
+    - uses: actions/setup-node@v5
       with:
         node-version: lts/*
     - uses: actions/setup-python@v5
@@ -33,20 +62,15 @@ jobs:
         enable-cache: true
     - name: Install dependencies
       run: npm ci
-      working-directory: frontend
+      working-directory: Project_Apex/frontend
     - run: uv sync
-      working-directory: backend
-    - run: uv run bash frontend/scripts/generate-client.sh
-      env:
-        VIRTUAL_ENV: backend/.venv
-        SECRET_KEY: just-for-generating-client
-        POSTGRES_PASSWORD: just-for-generating-client
-        FIRST_SUPERUSER_PASSWORD: just-for-generating-client
+      working-directory: Project_Apex/backend
+    - run: . backend/.venv/bin/activate && bash frontend/scripts/generate-client.sh
     - name: Add changes to git
       run: |
         git config --local user.email "github-actions@github.com"
         git config --local user.name "github-actions"
-        git add frontend/src/client
+        git add frontend/src/api
     # Same repo PRs
     - name: Push changes
       if: ( github.event_name != 'pull_request' || github.secret_source == 'Actions' )

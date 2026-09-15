@@ -12,9 +12,35 @@ on:
 jobs:
   test-backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Project_Apex
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Create CI env file
+        run: |
+          cat <<'EOF' > .env
+          PROJECT_NAME=Apex Trading Platform
+          ENVIRONMENT=local
+          DOMAIN=localhost
+          FRONTEND_HOST=http://localhost:5173
+          BACKEND_CORS_ORIGINS=http://localhost:5173
+          POSTGRES_SERVER=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=just-for-ci
+          POSTGRES_DB=apex_ci
+          SECRET_KEY=just-for-ci-secret-key
+          FIRST_SUPERUSER=admin@example.com
+          FIRST_SUPERUSER_PASSWORD=just-for-ci-password
+          EMAILS_FROM_EMAIL=noreply@example.com
+          EMAILS_FROM_NAME=Apex Support
+          SMTP_HOST=localhost
+          SMTP_PORT=1025
+          SMTP_TLS=false
+          DOCKER_USERNAME=local
+          EOF
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -26,16 +52,26 @@ jobs:
           enable-cache: true
       - run: docker compose down -v --remove-orphans
       - run: docker compose up -d db mailcatcher
+      - name: Wait for database
+        run: |
+          for _ in $(seq 1 60); do
+            if docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Database did not become ready in time." >&2
+          exit 1
       - name: Migrate DB
         run: uv run bash scripts/prestart.sh
-        working-directory: backend
+        working-directory: Project_Apex/backend
       - name: Run tests
         run: uv run bash scripts/tests-start.sh "Coverage for ${{ github.sha }}"
-        working-directory: backend
+        working-directory: Project_Apex/backend
       - run: docker compose down -v --remove-orphans
       - name: Store coverage files
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
-          path: backend/htmlcov
+          path: Project_Apex/backend/htmlcov
           include-hidden-files: true

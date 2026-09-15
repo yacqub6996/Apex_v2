@@ -31,7 +31,7 @@ COPY app/alembic ./alembic
 # -----------------------------------------------------------------
 
 # 7. Create Static Directories
-RUN mkdir -p static && mkdir -p app/static
+RUN mkdir -p static storage app/static
 
 # 8. Start the App
 EXPOSE 8000

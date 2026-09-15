@@ -10,6 +10,7 @@ import type { CopyTradingAggregateResponse } from "../models/CopyTradingAggregat
 import type { CopyTradingHistoryResponse } from "../models/CopyTradingHistoryResponse";
 import type { CopyTradingStartRequest } from "../models/CopyTradingStartRequest";
 import type { CopyTradingStartResponse } from "../models/CopyTradingStartResponse";
+import type { CopyTradingSummaryResponse } from "../models/CopyTradingSummaryResponse";
 import type { CopyTradingUpdateResponse } from "../models/CopyTradingUpdateResponse";
 import type { CopyTradingWithdrawalRequest } from "../models/CopyTradingWithdrawalRequest";
 import type { CopyTradingWithdrawalResponse } from "../models/CopyTradingWithdrawalResponse";
@@ -19,9 +20,22 @@ import type { FundWalletResponse } from "../models/FundWalletResponse";
 import type { PartialReduceRequest } from "../models/PartialReduceRequest";
 import type { TraderVerificationRequest } from "../models/TraderVerificationRequest";
 import type { TraderVerificationResponse } from "../models/TraderVerificationResponse";
-import type { CopyTradingSummaryResponse } from "../models/CopyTradingSummaryResponse";
 
 export class CopyTradingService {
+    /**
+     * Get Copy Trading User Summary
+     * Return per-user copy-trading allocation and PnL summary.
+     *
+     * This endpoint is user-scoped and complements the admin-level /summary endpoint.
+     * @returns CopyTradingSummaryResponse Successful Response
+     * @throws ApiError
+     */
+    public static copyTradingGetCopyTradingUserSummary(): CancelablePromise<CopyTradingSummaryResponse> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/copy-trading/user-summary",
+        });
+    }
     /**
      * Verify Trader Code
      * Validate a trader code and return a summary if the trader exists and is public.
@@ -226,18 +240,6 @@ export class CopyTradingService {
         return __request(OpenAPI, {
             method: "GET",
             url: "/api/v1/copy-trading/summary",
-        });
-    }
-    /**
-     * User Copy Trading Summary
-     * Return per-user copy-trading allocation and PnL summary.
-     * @returns CopyTradingSummaryResponse Successful Response
-     * @throws ApiError
-     */
-    public static copyTradingGetCopyTradingSummary(): CancelablePromise<CopyTradingSummaryResponse> {
-        return __request(OpenAPI, {
-            method: "GET",
-            url: "/api/v1/copy-trading/user-summary",
         });
     }
     /**

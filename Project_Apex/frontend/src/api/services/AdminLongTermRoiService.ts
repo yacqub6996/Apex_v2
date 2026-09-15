@@ -5,18 +5,18 @@
 import type { CancelablePromise } from "../core/CancelablePromise";
 import { OpenAPI } from "../core/OpenAPI";
 import { request as __request } from "../core/request";
-import type { LongTermRoiPushRequest } from "../models/LongTermRoiPushRequest";
-import type { LongTermRoiPushResponse } from "../models/LongTermRoiPushResponse";
+import type { LongTermExecutionPushRequest } from "../models/LongTermExecutionPushRequest";
+import type { LongTermExecutionPushResponse } from "../models/LongTermExecutionPushResponse";
 
 export class AdminLongTermRoiService {
     /**
      * Push Long Term Roi
      * Push a long-term ROI execution event to a specific user's long-term balance.
      * @param requestBody
-     * @returns LongTermRoiPushResponse Successful Response
+     * @returns LongTermExecutionPushResponse Successful Response
      * @throws ApiError
      */
-    public static adminLongTermRoiPushLongTermRoi(requestBody: LongTermRoiPushRequest): CancelablePromise<LongTermRoiPushResponse> {
+    public static adminLongTermRoiPushLongTermRoi(requestBody: LongTermExecutionPushRequest): CancelablePromise<LongTermExecutionPushResponse> {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/admin/long-term-roi/push",

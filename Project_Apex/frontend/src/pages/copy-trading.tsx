@@ -173,7 +173,7 @@ const FundCopyWallet = () => {
 
   const copySummaryQuery = useQuery<CopyTradingSummaryResponse>({
     queryKey: ["copy-trading-summary"],
-    queryFn: () => CopyTradingService.copyTradingGetCopyTradingSummary(),
+    queryFn: () => CopyTradingService.copyTradingGetCopyTradingUserSummary(),
   });
 
   const copyExecutionsQuery = useQuery({

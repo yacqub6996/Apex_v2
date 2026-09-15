@@ -58,7 +58,7 @@ export const ActiveCopyPositionsImproved: React.FC = () => {
   // Fetch copy-trading summary (per-position performance + allocation)
   const summaryQuery = useQuery<CopyTradingSummaryResponse>({
     queryKey: ['copy-trading-summary'],
-    queryFn: () => CopyTradingService.copyTradingGetCopyTradingSummary(),
+    queryFn: () => CopyTradingService.copyTradingGetCopyTradingUserSummary(),
   });
 
   // Helper to apply highlight animation after successful mutation
