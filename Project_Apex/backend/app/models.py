@@ -114,6 +114,7 @@ class ExecutionEventType(str, Enum):
 
 
 class WithdrawalSource(str, Enum):
+    MAIN_WALLET = "MAIN_WALLET"
     COPY_TRADING_WALLET = "COPY_TRADING_WALLET"
     ACTIVE_ALLOCATION = "ACTIVE_ALLOCATION"
     LONG_TERM_WALLET = "LONG_TERM_WALLET"
@@ -505,6 +506,7 @@ class TransactionBase(SQLModel):
 
 class TransactionCreate(TransactionBase):
     user_id: uuid.UUID | None = None
+    withdrawal_source: WithdrawalSource | None = None
 
 
 class TransactionUpdate(SQLModel):
@@ -513,6 +515,7 @@ class TransactionUpdate(SQLModel):
     status: TransactionStatus | None = None
     description: str | None = Field(default=None, max_length=255)
     long_term_investment_id: uuid.UUID | None = None
+    withdrawal_source: WithdrawalSource | None = None
 
 class Transaction(TransactionBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -1227,5 +1230,4 @@ class SupportAttachment(SQLModel, table=True):
     user_id: uuid.UUID | None = Field(default=None, foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
-
 

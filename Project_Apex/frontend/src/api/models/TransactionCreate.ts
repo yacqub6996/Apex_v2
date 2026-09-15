@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { TransactionStatus } from "./TransactionStatus";
 import type { TransactionType } from "./TransactionType";
+import type { WithdrawalSource } from "./WithdrawalSource";
 
 export type TransactionCreate = {
     amount: number;
@@ -12,4 +13,5 @@ export type TransactionCreate = {
     description?: string | null;
     long_term_investment_id?: string | null;
     user_id?: string | null;
+    withdrawal_source?: WithdrawalSource | null;
 };

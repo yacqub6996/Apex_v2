@@ -684,11 +684,13 @@ async def fund_wallet(
         current_user.copy_trading_wallet = CopyTradingWallet(user_id=current_user.id, balance=0.0)
         session.add(current_user.copy_trading_wallet)
 
-    if (current_user.wallet_balance or 0.0) < amount:
+    main_available = float(current_user.wallet_balance or current_user.balance or 0.0)
+    if main_available < amount:
         raise HTTPException(status_code=400, detail="Insufficient wallet balance")
 
     # Apply atomic updates
-    current_user.wallet_balance = round(float(current_user.wallet_balance or 0.0) - amount, 2)
+    current_user.wallet_balance = round(main_available - amount, 2)
+    current_user.balance = current_user.wallet_balance
     current_user.copy_trading_wallet.balance = round(
         float(current_user.copy_trading_wallet.balance or 0.0) + amount, 2
     )

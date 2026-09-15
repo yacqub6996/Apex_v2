@@ -22,7 +22,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/providers/auth-provider';
 import { CopyTradingService } from '@/api/services/CopyTradingService';
 import { WalletTransferDirection } from '@/api/models/WalletTransferDirection';
+import { TransactionsService } from '@/api/services/TransactionsService';
 import { transferToLongTermWallet } from '@/services/long-term-investment-actions';
+import { requestLongTermWalletWithdrawal } from '@/services/long-term-investment-actions';
 
 type RouteKey =
   | 'MAIN_TO_COPY'
@@ -49,12 +51,17 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
 
   const pendingQuery = useQuery({
     queryKey: ['pending-summary'],
-    // No aggregated pending summary in new API; default to zeroes to avoid blocking UI
-    queryFn: async () => ({
-      main_wallet_pending: 0,
-      copy_trading_wallet_pending: 0,
-      long_term_wallet_pending: 0,
-    }),
+    queryFn: async () => {
+      try {
+        return await TransactionsService.transactionsGetPendingSummary();
+      } catch {
+        return {
+          main_wallet_pending: 0,
+          copy_trading_wallet_pending: 0,
+          long_term_wallet_pending: 0,
+        };
+      }
+    },
     enabled: open,
   });
 
@@ -89,7 +96,8 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
     }
   }, [route, walletBalance, copyWalletBalance, longTermWalletBalance, pendingQuery.data]);
 
-  const requiresKyc = route === 'MAIN_TO_LONG_TERM';
+  const requiresKyc =
+    route === 'MAIN_TO_LONG_TERM' || route === 'COPY_TO_MAIN' || route === 'LONG_TERM_TO_MAIN';
   const isDisabledByKyc = requiresKyc && !isKycApproved;
 
   const validate = (): boolean => {
@@ -113,17 +121,20 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
         case 'MAIN_TO_COPY':
           return CopyTradingService.copyTradingFundWallet({ amount: amt });
         case 'COPY_TO_MAIN':
-          // The new API exposes withdrawal via admin simulations for approval flows;
-          // copy-trading user endpoint is not present. For now, raise a friendly error.
-          throw new Error('Copy Trading withdrawal endpoint not available. Please use the Withdraw section.');
+          return CopyTradingService.copyTradingRequestCopyTradingWithdrawal({
+            amount: amt,
+            description: 'Move funds from copy trading wallet to main wallet',
+          });
         case 'MAIN_TO_LONG_TERM':
           return transferToLongTermWallet({ 
             amount: amt, 
             direction: WalletTransferDirection.MAIN_TO_LONG_TERM 
           });
         case 'LONG_TERM_TO_MAIN':
-          // No direct endpoint in client; handled on Long-Term page. Surface message.
-          throw new Error('Long-Term wallet withdrawal is requested from the Long-Term page.');
+          return requestLongTermWalletWithdrawal({
+            amount: amt,
+            description: 'Move funds from long-term wallet to main wallet',
+          });
       }
     },
     onMutate: async () => {
@@ -152,6 +163,9 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
       queryClient.invalidateQueries({ queryKey: ['long-term-investments'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['copy-trading-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['copied-traders'] });
       onClose();
     },
     onError: (e: any, _variables, context: any) => {
@@ -188,9 +202,15 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
               onChange={(e) => setRoute(e.target.value as RouteKey)}
             >
               <FormControlLabel value="MAIN_TO_COPY" control={<Radio />} label="Main Wallet → Copy Trading Wallet" />
+              <FormControlLabel value="COPY_TO_MAIN" control={<Radio />} label="Copy Trading Wallet → Main Wallet" />
               <FormControlLabel value="MAIN_TO_LONG_TERM" control={<Radio />} label="Main Wallet → Long-Term Wallet" />
+              <FormControlLabel value="LONG_TERM_TO_MAIN" control={<Radio />} label="Long-Term Wallet → Main Wallet" />
             </RadioGroup>
-            <FormHelperText>Withdrawals are managed separately for approval flows.</FormHelperText>
+            <FormHelperText>
+              {route === 'MAIN_TO_COPY' || route === 'MAIN_TO_LONG_TERM'
+                ? 'Transfers into wallet accounts complete immediately.'
+                : 'Transfers back to your main wallet are submitted for admin approval.'}
+            </FormHelperText>
           </FormControl>
 
           <FormControl fullWidth>
