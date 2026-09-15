@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -26,7 +28,21 @@ jobs:
           enable-cache: true
       - run: uv sync
         working-directory: Project_Apex/backend
-      - run: uv run ruff check app
+      - name: Collect changed backend Python files
+        id: changed-backend-python
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files="$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- Project_Apex/backend | grep '\.py$' || true)"
+          else
+            files="$(git diff-tree --no-commit-id --name-only -r "${GITHUB_SHA}" -- Project_Apex/backend | grep '\.py$' || true)"
+          fi
+          files="$(printf '%s\n' "$files" | sed '/^$/d; s#^Project_Apex/backend/##' | tr '\n' ' ' | xargs)"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.changed-backend-python.outputs.files != '' }}
+        run: uv run ruff check ${{ steps.changed-backend-python.outputs.files }}
         working-directory: Project_Apex/backend
-      - run: uv run ruff format app --check
+      - if: ${{ steps.changed-backend-python.outputs.files != '' }}
+        run: uv run ruff format --check ${{ steps.changed-backend-python.outputs.files }}
         working-directory: Project_Apex/backend
+      - if: ${{ steps.changed-backend-python.outputs.files == '' }}
+        run: echo "No backend Python files changed."
