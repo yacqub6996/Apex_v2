@@ -26,7 +26,7 @@ jobs:
           DOMAIN=localhost
           FRONTEND_HOST=http://localhost:5173
           BACKEND_CORS_ORIGINS=http://localhost:5173
-          POSTGRES_SERVER=db
+          POSTGRES_SERVER=localhost
           POSTGRES_PORT=5432
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=just-for-ci
@@ -36,7 +36,7 @@ jobs:
           FIRST_SUPERUSER_PASSWORD=just-for-ci-password
           EMAILS_FROM_EMAIL=noreply@example.com
           EMAILS_FROM_NAME=Apex Support
-          SMTP_HOST=mailcatcher
+          SMTP_HOST=localhost
           SMTP_PORT=1025
           SMTP_TLS=false
           DOCKER_USERNAME=local
