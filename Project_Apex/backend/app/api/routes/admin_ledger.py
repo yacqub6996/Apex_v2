@@ -75,7 +75,7 @@ def require_admin(current_user: CurrentUser) -> None:
 
 
 def _ensure_copy_trading_wallet(session: SessionDep, user: User) -> CopyTradingWallet:
-    session.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
+    session.refresh(user, attribute_names=["copy_trading_wallet"])
     wallet = user.copy_trading_wallet
     if wallet is None:
         wallet = CopyTradingWallet(user_id=user.id, balance=0.0)
@@ -86,7 +86,7 @@ def _ensure_copy_trading_wallet(session: SessionDep, user: User) -> CopyTradingW
 
 
 def _ensure_long_term_wallet(session: SessionDep, user: User) -> LongTermWallet:
-    session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+    session.refresh(user, attribute_names=["long_term_wallet"])
     wallet = user.long_term_wallet
     if wallet is None:
         wallet = LongTermWallet(user_id=user.id, balance=0.0)

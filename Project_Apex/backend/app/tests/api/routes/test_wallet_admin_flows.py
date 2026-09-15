@@ -10,7 +10,7 @@ from app.tests.utils.utils import random_email, random_lower_string
 
 
 def _create_user(session: Session, *, email: str, password: str, full_name: str) -> User:
-    user_in = UserCreate(email=email, ****** full_name=full_name)
+    user_in = UserCreate(email=email, password=password, full_name=full_name)
     return crud.create_user(session=session, user_create=user_in)
 
 
@@ -20,7 +20,8 @@ def _login_headers(client: TestClient, *, email: str, password: str) -> dict[str
         data={"username": email, "password": password},
     )
     response.raise_for_status()
-    return {"Authorization": f"******'access_token']}"}
+    token = response.json()["access_token"]
+    return {"Authorization": "Bearer " + token}
 
 
 def test_admin_can_approve_main_wallet_withdrawal_request(
@@ -30,14 +31,14 @@ def test_admin_can_approve_main_wallet_withdrawal_request(
 ) -> None:
     email = random_email()
     password = random_lower_string()
-    user = _create_user(db, email=email, ****** full_name="Main Wallet User")
+    user = _create_user(db, email=email, password=password, full_name="Main Wallet User")
     user.wallet_balance = 500.0
     user.balance = 500.0
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    user_headers = _login_headers(client, email=email, ******
+    user_headers = _login_headers(client, email=email, password=password,)
     request_response = client.post(
         f"{settings.API_V1_STR}/transactions/",
         headers=user_headers,
@@ -70,19 +71,19 @@ def test_admin_can_approve_copy_wallet_withdrawal_request(
 ) -> None:
     email = random_email()
     password = random_lower_string()
-    user = _create_user(db, email=email, ****** full_name="Copy Wallet User")
+    user = _create_user(db, email=email, password=password, full_name="Copy Wallet User")
     user.wallet_balance = 100.0
     user.balance = 100.0
     user.kyc_status = KycStatus.APPROVED
     db.add(user)
     db.commit()
-    db.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["copy_trading_wallet"])
     assert user.copy_trading_wallet is not None
     user.copy_trading_wallet.balance = 200.0
     db.add(user.copy_trading_wallet)
     db.commit()
 
-    user_headers = _login_headers(client, email=email, ******
+    user_headers = _login_headers(client, email=email, password=password,)
     request_response = client.post(
         f"{settings.API_V1_STR}/copy-trading/request-withdrawal",
         headers=user_headers,
@@ -98,7 +99,7 @@ def test_admin_can_approve_copy_wallet_withdrawal_request(
     assert approve_response.status_code == 200
 
     db.refresh(user)
-    db.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["copy_trading_wallet"])
     assert user.copy_trading_wallet is not None
     assert user.wallet_balance == 150.0
     assert user.balance == 150.0
@@ -112,20 +113,20 @@ def test_rejecting_long_term_wallet_withdrawal_restores_reserved_funds(
 ) -> None:
     email = random_email()
     password = random_lower_string()
-    user = _create_user(db, email=email, ****** full_name="Long-Term Wallet User")
+    user = _create_user(db, email=email, password=password, full_name="Long-Term Wallet User")
     user.wallet_balance = 100.0
     user.balance = 100.0
     user.long_term_balance = 300.0
     user.kyc_status = KycStatus.APPROVED
     db.add(user)
     db.commit()
-    db.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["long_term_wallet"])
     assert user.long_term_wallet is not None
     user.long_term_wallet.balance = 300.0
     db.add(user.long_term_wallet)
     db.commit()
 
-    user_headers = _login_headers(client, email=email, ******
+    user_headers = _login_headers(client, email=email, password=password,)
     request_response = client.post(
         f"{settings.API_V1_STR}/long-term/request-withdrawal",
         headers=user_headers,
@@ -135,7 +136,7 @@ def test_rejecting_long_term_wallet_withdrawal_restores_reserved_funds(
     transaction_id = request_response.json()["transaction_id"]
 
     db.refresh(user)
-    db.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["long_term_wallet"])
     assert user.long_term_wallet is not None
     assert float(user.long_term_wallet.balance) == 225.0
     assert user.long_term_balance == 225.0
@@ -148,7 +149,7 @@ def test_rejecting_long_term_wallet_withdrawal_restores_reserved_funds(
     assert reject_response.json()["status"] == TransactionStatus.FAILED.value
 
     db.refresh(user)
-    db.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["long_term_wallet"])
     assert user.long_term_wallet is not None
     assert float(user.long_term_wallet.balance) == 300.0
     assert user.long_term_balance == 300.0
@@ -161,7 +162,7 @@ def test_superuser_override_updates_wallet_balances_and_can_clear_accounts(
 ) -> None:
     email = random_email()
     password = random_lower_string()
-    user = _create_user(db, email=email, ****** full_name="Override User")
+    user = _create_user(db, email=email, password=password, full_name="Override User")
     user.wallet_balance = 20.0
     user.balance = 20.0
     user.copy_trading_balance = 30.0
@@ -206,7 +207,7 @@ def test_superuser_override_updates_wallet_balances_and_can_clear_accounts(
     assert clear_override.status_code == 200
 
     db.refresh(user)
-    db.refresh(user, attribute_names=["copy_trading_wallet", "long_term_wallet"])  # type: ignore[arg-type]
+    db.refresh(user, attribute_names=["copy_trading_wallet", "long_term_wallet"])
     assert user.copy_trading_wallet is not None
     assert user.long_term_wallet is not None
     assert user.wallet_balance == 0.0

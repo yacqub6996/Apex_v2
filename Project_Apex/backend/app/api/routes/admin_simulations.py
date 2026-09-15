@@ -365,29 +365,29 @@ async def approve_withdrawal(
 
     if source_value == WithdrawalSource.COPY_TRADING_WALLET.value:
         # Ensure wallet is loaded and has sufficient funds
-        session.refresh(user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
-        wallet = user.copy_trading_wallet
-        if wallet is None:
+        session.refresh(user, attribute_names=["copy_trading_wallet"])
+        copy_wallet = user.copy_trading_wallet
+        if copy_wallet is None:
             raise HTTPException(status_code=400, detail="Copy trading wallet not initialized")
-        wallet_balance = float(wallet.balance or 0.0)
+        wallet_balance = float(copy_wallet.balance or 0.0)
         if transaction.amount > wallet_balance:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient copy wallet balance. Available: ${wallet_balance:.2f}",
             )
-        wallet.balance = round(float(wallet.balance or 0.0) - transaction.amount, 2)
+        copy_wallet.balance = round(float(copy_wallet.balance or 0.0) - transaction.amount, 2)
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
         user.balance = user.wallet_balance
-        session.add(wallet)
+        session.add(copy_wallet)
         session.add(user)
         event_payload_extra["source_wallet"] = "copy_trading_wallet"
     elif source_value == WithdrawalSource.LONG_TERM_WALLET.value:
         # Long-term wallet withdrawals reserve funds at request time by
         # debiting the long_term_wallet balance immediately. At approval
         # we only credit the main wallet to avoid double-deducting.
-        session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
-        wallet = user.long_term_wallet
-        if wallet is None:
+        session.refresh(user, attribute_names=["long_term_wallet"])
+        long_term_wallet = user.long_term_wallet
+        if long_term_wallet is None:
             raise HTTPException(status_code=400, detail="Long-term wallet not initialized")
 
         user.wallet_balance = round(float(user.wallet_balance or 0.0) + transaction.amount, 2)
@@ -537,13 +537,13 @@ async def reject_withdrawal(
             user = session.get(User, transaction.user_id)
             if user is None:
                 raise HTTPException(status_code=404, detail="User not found")
-            session.refresh(user, attribute_names=["long_term_wallet"])  # type: ignore[arg-type]
-            wallet = user.long_term_wallet
-            if wallet is None:
+            session.refresh(user, attribute_names=["long_term_wallet"])
+            long_term_wallet = user.long_term_wallet
+            if long_term_wallet is None:
                 raise HTTPException(status_code=400, detail="Long-term wallet not initialized")
-            wallet.balance = round(float(wallet.balance or 0.0) + transaction.amount, 2)
+            long_term_wallet.balance = round(float(long_term_wallet.balance or 0.0) + transaction.amount, 2)
             user.long_term_balance = round(float(user.long_term_balance or 0.0) + transaction.amount, 2)
-            session.add(wallet)
+            session.add(long_term_wallet)
             session.add(user)
 
         transaction.status = TransactionStatus.FAILED
