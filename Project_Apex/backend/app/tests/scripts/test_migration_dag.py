@@ -16,7 +16,7 @@ def test_migration_dag_single_head() -> None:
         len(heads) == 1
     ), f"Expected exactly 1 migration head, found {len(heads)}: {heads}"
     head_rev = heads[0]
-    assert head_rev == "d0e9222e0d65", f"Unexpected head revision: {head_rev}"
+    assert head_rev == "20260918_metadata_tx", f"Unexpected head revision: {head_rev}"
 
     all_revs = {r.revision for r in script.walk_revisions()}
     assert (

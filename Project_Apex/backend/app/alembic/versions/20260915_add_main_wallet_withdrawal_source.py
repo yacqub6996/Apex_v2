@@ -1,7 +1,7 @@
 """add main wallet withdrawal source
 
 Revision ID: 20260915_main_wallet_src
-Revises: 9e2af088d74d
+Revises: 7e3802458d80, 20251202_fix_kyc_urls
 Create Date: 2026-09-15 19:45:00.000000
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260915_main_wallet_src"
-down_revision = "9e2af088d74d"
+down_revision = ("7e3802458d80", "20251202_fix_kyc_urls")
 branch_labels = None
 depends_on = None
 
