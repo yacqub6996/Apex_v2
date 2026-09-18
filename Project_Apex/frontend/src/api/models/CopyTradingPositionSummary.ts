@@ -21,6 +21,10 @@ export type CopyTradingPositionSummary = {
     roi_percentage: number;
     session_trade_count: number;
     session_win_rate: number;
+    session_profit?: number;
+    commission_due?: number;
+    held_released_equity?: number;
+    equity_released?: boolean;
     readonly traderCode: string;
     readonly displayName: string;
     readonly riskLevel: string;

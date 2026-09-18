@@ -14,7 +14,10 @@ import {
   Stack,
   Alert,
   Divider,
+  InputAdornment,
+  Chip,
 } from '@mui/material'
+import LockIcon from '@mui/icons-material/Lock'
 import { useNetworks, useCryptoRates } from '@/services/crypto'
 import type { Asset, NetworkKey } from '@/types/crypto'
 
@@ -79,11 +82,11 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   }, [asset, availableNetworks, network, onNetworkChange])
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={{ xs: 2, sm: 2.5 }}>
       <Typography variant="body2" color="text.secondary">
         {isCommission
-          ? 'This deposit pays trader commission. A $5 network fee will be added.'
-          : 'Enter the amount you want to deposit in USD. A $5 VAT fee will be added.'}
+          ? 'This payment settles your trader performance commission. A $5.00 blockchain network fee is added to cover transaction gas and processing.'
+          : 'Enter the amount you want to deposit in USD. A $5.00 VAT fee will be added.'}
       </Typography>
 
       {/* Amount Input */}
@@ -98,10 +101,42 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
           }}
           type="number"
           fullWidth
-          disabled={lockAmount}
           placeholder={isCommission ? "0.00" : "100.00"}
           InputProps={{
             readOnly: lockAmount,
+            startAdornment: (
+              <InputAdornment position="start">
+                <Typography sx={{ fontWeight: 600, color: 'text.secondary' }}>$</Typography>
+              </InputAdornment>
+            ),
+            endAdornment: lockAmount ? (
+              <InputAdornment position="end">
+                <Chip
+                  icon={<LockIcon sx={{ fontSize: '13px !important' }} />}
+                  label="Locked"
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  sx={{
+                    fontWeight: 600,
+                    height: 24,
+                    fontSize: '0.72rem',
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)',
+                  }}
+                />
+              </InputAdornment>
+            ) : undefined,
+            sx: lockAmount
+              ? {
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+                  fontWeight: 600,
+                  '& input': {
+                    color: 'text.primary',
+                    cursor: 'default',
+                    fontWeight: 600,
+                  },
+                }
+              : undefined,
           }}
           inputProps={{
             min: minAmount,
@@ -111,7 +146,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
           error={usdAmount > 0 && !isValidAmount}
           helperText={
             lockAmount
-              ? 'Trader commission amount is fixed based on your copy trading session profit.'
+              ? '🔒 Fixed commission amount: calculated from your closed session profits and cannot be edited.'
               : usdAmount > 0 && !isValidAmount
               ? `Minimum deposit is $${minAmount.toFixed(2)}`
               : `Minimum: $${minAmount.toFixed(2)}`
@@ -120,7 +155,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       </Box>
 
       {/* Asset Selection */}
-      <FormControl fullWidth>
+      <FormControl fullWidth size="small">
         <InputLabel>Cryptocurrency</InputLabel>
         <Select
           value={asset}
@@ -136,7 +171,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       </FormControl>
 
       {/* Network Selection */}
-      <FormControl fullWidth disabled={networksLoading}>
+      <FormControl fullWidth size="small" disabled={networksLoading}>
         <InputLabel>Network</InputLabel>
         <Select
           value={network}
@@ -158,34 +193,47 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
 
       {/* Summary */}
       {isValidAmount && (
-        <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: 'background.default', borderRadius: 2, border: 1, borderColor: 'divider' }}>
           <Stack spacing={1}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2">{isCommission ? 'Commission Amount:' : 'Amount:'}</Typography>
-              <Typography variant="body2" fontWeight={500}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                {isCommission ? 'Trader Performance Commission:' : 'Deposit Amount:'}
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
                 ${usdAmount.toFixed(2)}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2">VAT Fee:</Typography>
-              <Typography variant="body2" fontWeight={500}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                {isCommission ? 'Blockchain Network & Gas Fee:' : 'VAT Fee:'}
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
                 ${vatAmount.toFixed(2)}
               </Typography>
             </Box>
-            <Divider />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" fontWeight={600}>
-                Total:
+            <Divider sx={{ my: 0.5 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                Total Due to Send:
               </Typography>
-              <Typography variant="body2" fontWeight={600}>
+              <Typography variant="subtitle2" fontWeight={700} color="primary.main">
                 ${totalAmount.toFixed(2)}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+
+            {isCommission && (
+              <Box sx={{ mt: 1, p: 1.25, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)', borderRadius: 1.5, border: '1px dashed', borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>
+                  <strong>Amount Breakdown:</strong> The <strong>${usdAmount.toFixed(2)}</strong> settles the trader's commission fee. The extra <strong>${vatAmount.toFixed(2)}</strong> is the required blockchain network fee for on-chain gas (Total: <strong>${totalAmount.toFixed(2)}</strong>).
+                </Typography>
+              </Box>
+            )}
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, pt: 1, borderTop: 1, borderColor: 'divider' }}>
               <Typography variant="body2" color="text.secondary">
                 You'll send:
               </Typography>
-              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              <Typography variant="body2" fontWeight={700} color="text.primary">
                 ≈ {cryptoAmount} {asset}
               </Typography>
             </Box>
@@ -193,9 +241,8 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
         </Box>
       )}
 
-      <Alert severity="info" sx={{ mt: 2 }}>
-        After generating your deposit address, you'll have 20 minutes to send the payment.
-        Once sent, click "I Have Made Payment" to notify our team for verification.
+      <Alert severity="info" sx={{ p: { xs: 1, sm: 1.5 }, '& .MuiAlert-message': { fontSize: { xs: '0.75rem', sm: '0.85rem' } } }}>
+        After generating your address, you have 20 minutes to complete payment. Once sent, click "I Have Made Payment" so our team can verify it on-chain.
       </Alert>
     </Stack>
   )

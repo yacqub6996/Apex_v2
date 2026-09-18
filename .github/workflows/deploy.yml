@@ -43,10 +43,13 @@ jobs:
             # 2. Pull the image we just built
             docker compose pull backend
             
-            # 3. Restart the backend
+            # 3. Run migrations and db initialization safely before restarting service
+            docker compose run --rm backend bash scripts/prestart.sh
+            
+            # 4. Restart the backend
             docker compose up -d backend
             
-            # 4. Clean up space
+            # 5. Clean up space
             docker image prune -f
 
   deploy-frontend:

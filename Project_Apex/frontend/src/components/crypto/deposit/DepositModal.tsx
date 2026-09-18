@@ -15,10 +15,12 @@ import {
   StepLabel,
   Alert,
   Box,
+  IconButton,
   useMediaQuery,
   useTheme,
   Typography,
 } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import { DepositInputStep } from './DepositInputStep'
 import { DepositAddressStep } from './DepositAddressStep'
 import { DepositPendingStep } from './DepositPendingStep'
@@ -177,19 +179,62 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           sx: {
             borderRadius: isMobile ? 0 : 3,
             minHeight: isMobile ? '100vh' : '600px',
+            m: isMobile ? 0 : 2,
+            pt: { xs: 'max(8px, env(safe-area-inset-top, 0px))', sm: 0 },
+            pb: { xs: 'max(8px, env(safe-area-inset-bottom, 0px))', sm: 0 },
+            display: 'flex',
+            flexDirection: 'column',
           },
         }}
       >
-        <DialogTitle>
-          <Box sx={{ mb: subtitle ? 0.5 : 2, fontWeight: 600, fontSize: '1.25rem' }}>
-            {title}
+        <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 1.5, sm: 2.5 }, pb: { xs: 1, sm: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                variant="h6"
+                component="div"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                  lineHeight: 1.25,
+                }}
+              >
+                {title}
+              </Typography>
+              {subtitle && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
+                  {subtitle}
+                </Typography>
+              )}
+            </Box>
+            <IconButton
+              aria-label="close"
+              onClick={handleClose}
+              size="small"
+              sx={{
+                color: 'text.secondary',
+                mt: -0.5,
+                mr: -0.5,
+                flexShrink: 0,
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
-          {subtitle && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {subtitle}
-            </Typography>
-          )}
-          <Stepper activeStep={getStepIndex()} alternativeLabel>
+          <Stepper
+            activeStep={getStepIndex()}
+            alternativeLabel
+            sx={{
+              mt: { xs: 1.5, sm: 2 },
+              '& .MuiStepLabel-label': {
+                fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                mt: { xs: 0.5, sm: 1 },
+              },
+              '& .MuiStepIcon-root': {
+                fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              },
+            }}
+          >
             {steps.map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
@@ -198,7 +243,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           </Stepper>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ p: { xs: 2, sm: 3 } }}>
+        <DialogContent dividers sx={{ p: { xs: 1.5, sm: 3 } }}>
           {/* Error alerts */}
           {generateError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -231,15 +276,22 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               onExpire={handleExpire}
               onConfirm={handleConfirmClick}
               isConfirming={isConfirming}
+              isCommission={isCommission}
             />
           )}
 
           {step === 'pending' && (
-            <DepositPendingStep onClose={handleClose} />
+            <DepositPendingStep
+              onClose={handleClose}
+              isCommission={isCommission}
+              heldEquity={metadataPayload?.held_released_equity}
+              commissionAmount={metadataPayload?.commission_amount || parseFloat(amount) || 0}
+              traderName={metadataPayload?.trader_name}
+            />
           )}
         </DialogContent>
 
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: { xs: 1.5, sm: 2 } }}>
           {step === 'input' && (
             <>
               <Button onClick={handleClose} variant="outlined">

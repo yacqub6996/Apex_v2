@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/providers/auth-provider";
@@ -29,6 +30,7 @@ import type { RiskTolerance } from "@/api/models/RiskTolerance";
 import type { CopyTradingStartRequest } from "@/api/models/CopyTradingStartRequest";
 import type { TraderVerificationRequest } from "@/api/models/TraderVerificationRequest";
 import PeopleIcon from "@mui/icons-material/People";
+import LockIcon from "@mui/icons-material/Lock";
 import { CopyTradingService as CopyTradingApi } from "@/api/services/CopyTradingService";
 import type { FundWalletResponse } from "@/api/models/FundWalletResponse";
 import type { CopyTradingSummaryResponse } from "@/api/models/CopyTradingSummaryResponse";
@@ -277,14 +279,55 @@ const FundCopyWallet = () => {
   const copiedTraders = Array.isArray(copiedTradersQuery.data) ? copiedTradersQuery.data : [];
 
   const summaryPositions = copySummaryQuery.data?.positions ?? [];
-  const visibleTraders = (summaryPositions.length > 0 ? summaryPositions : copiedTraders).filter(
-    (entry) => entry.status !== "STOPPED",
+  const allPositions = summaryPositions.length > 0 ? summaryPositions : copiedTraders;
+  const visibleTraders = allPositions.filter(
+    (entry: any) => entry.status !== "STOPPED",
   );
 
+  const stoppedWithHeldEquity = allPositions.filter(
+    (entry: any) =>
+      entry.status === "STOPPED" &&
+      ((Number(entry.held_released_equity) > 0) || (Number(entry.commission_due) > 0 && !entry.equity_released))
+  );
+
+  const stoppedWithoutHeldEquity = allPositions.filter(
+    (entry: any) =>
+      entry.status === "STOPPED" &&
+      !((Number(entry.held_released_equity) > 0) || (Number(entry.commission_due) > 0 && !entry.equity_released))
+  );
+
+  const totalHeldEquity =
+    (typeof copySummaryQuery.data?.total_held_equity === "number" && copySummaryQuery.data.total_held_equity > 0)
+      ? copySummaryQuery.data.total_held_equity
+      : (allPositions ?? []).reduce(
+          (sum: number, t: any) => sum + (Number(t.held_released_equity) || 0),
+          0
+        );
+
+  const totalCommissionDue =
+    (typeof copySummaryQuery.data?.total_commission_due === "number" && copySummaryQuery.data.total_commission_due > 0)
+      ? copySummaryQuery.data.total_commission_due
+      : (allPositions ?? []).reduce(
+          (sum: number, t: any) => sum + (Number(t.commission_due) || 0),
+          0
+        );
+
+  const handleOpenCommissionModal = (trader: any) => {
+    setCommissionModalState({
+      open: true,
+      amount: Number(trader.commission_due) || 0,
+      traderName: trader.displayName || trader.display_name || "Trader",
+      copyId: trader.copy_id || trader.id,
+      sessionProfit: Number(trader.session_profit) || Number(trader.total_profit) || 0,
+      feePercentage: Number(trader.feePercentage) || Number(trader.copy_fee_percentage) || 20,
+      releasedEquity: Number(trader.held_released_equity) || Number(trader.allocation) || 0,
+    });
+  };
+
   const activeCopyCount =
-    copySummaryQuery.data?.active_positions ?? visibleTraders.filter((entry) => entry.status === "ACTIVE").length;
+    copySummaryQuery.data?.active_positions ?? visibleTraders.filter((entry: any) => entry.status === "ACTIVE").length;
   const pausedCopyCount =
-    copySummaryQuery.data?.paused_positions ?? visibleTraders.filter((entry) => entry.status === "PAUSED").length;
+    copySummaryQuery.data?.paused_positions ?? visibleTraders.filter((entry: any) => entry.status === "PAUSED").length;
 
   const activeTradingBalance =
     typeof copySummaryQuery.data?.total_allocation === "number"
@@ -323,7 +366,7 @@ const FundCopyWallet = () => {
           traderName: data.trader_name || "Trader",
           copyId: variables.copyId,
           sessionProfit: data.session_profit ?? 0,
-          feePercentage: data.copy_fee_percentage ?? 0,
+          feePercentage: data.copy_fee_percentage ?? 20,
           releasedEquity: data.released_equity ?? 0,
         });
       } else {
@@ -424,15 +467,31 @@ const FundCopyWallet = () => {
               <Typography variant="body2" color="text.secondary">
                 Copy Trading Wallet
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 500 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
                 {formatCurrency(
                   typeof user?.copy_trading_wallet_balance === "number"
                     ? user.copy_trading_wallet_balance
                     : 0,
                 )}
               </Typography>
+              {totalHeldEquity > 0 && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                    mt: 0.5,
+                  }}
+                >
+                  <LockIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                  <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
+                    Held in Escrow: {formatCurrency(totalHeldEquity)}
+                  </Typography>
+                </Box>
+              )}
               {(pendingSummaryQuery.data?.copy_trading_wallet_pending ?? 0) > 0 && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
                   Pending Admin Approval: {formatCurrency(pendingSummaryQuery.data?.copy_trading_wallet_pending ?? 0)}
                 </Typography>
               )}
@@ -456,6 +515,46 @@ const FundCopyWallet = () => {
         </Box>
       </Box>
 
+      {/* Held Equity Escrow Notification Banner */}
+      {totalHeldEquity > 0 && (
+        <Alert
+          severity="warning"
+          icon={<LockIcon fontSize="inherit" />}
+          sx={{
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'warning.light',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            '& .MuiAlert-message': { width: '100%' },
+          }}
+          action={
+            stoppedWithHeldEquity.length > 0 ? (
+              <Button
+                color="warning"
+                variant="contained"
+                size="small"
+                onClick={() => handleOpenCommissionModal(stoppedWithHeldEquity[0])}
+                sx={{
+                  mt: { xs: 1, sm: 0 },
+                  whiteSpace: 'nowrap',
+                  fontWeight: 600,
+                }}
+              >
+                Pay Commission ({formatCurrency(stoppedWithHeldEquity[0].commission_due || totalCommissionDue)})
+              </Button>
+            ) : undefined
+          }
+        >
+          <Box sx={{ pr: { sm: 2 } }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              {formatCurrency(totalHeldEquity)} Liquidated Equity Held in Escrow
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              Your stopped copy trading session has realized profit. Your funds ({formatCurrency(totalHeldEquity)}) are safely held in escrow pending verification of the trader's performance commission ({formatCurrency(totalCommissionDue)}). Once verified by our team, your funds will be unlocked and credited directly to your Copy Trading Wallet.
+            </Typography>
+          </Box>
+        </Alert>
+      )}
 
       {/* Main Content Grid */}
       <Box
@@ -527,17 +626,191 @@ const FundCopyWallet = () => {
                 />
               </Box>
             ) : visibleTraders.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: 'center' }}>
-                <PeopleIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                <Typography variant="body2" color="text.secondary">
-                  You're not copying any traders yet
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Start by entering a trader code below
-                </Typography>
-              </Box>
+              stoppedWithHeldEquity.length > 0 ? (
+                <Stack spacing={2}>
+                  <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      Copy Session Ended — Settlement Pending
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      You have ended your copy relationship. Your copy equity was liquidated and is held securely in escrow pending trader commission payment and blockchain confirmation.
+                    </Typography>
+                  </Alert>
+
+                  {stoppedWithHeldEquity.map((trader: any) => {
+                    const traderDisplayName = trader.displayName || trader.display_name || "Trader";
+                    const traderCodeVal = trader.traderCode || trader.trader_code || "";
+                    const heldEquity = Number(trader.held_released_equity) || Number(trader.allocation) || 0;
+                    const sessionProfit = Number(trader.session_profit) || Number(trader.total_profit) || 0;
+                    const commissionDue = Number(trader.commission_due) || 0;
+
+                    return (
+                      <Box
+                        key={trader.copy_id || trader.id}
+                        sx={{
+                          borderRadius: 2,
+                          border: 1,
+                          borderColor: 'warning.light',
+                          bgcolor: 'warning.lighter',
+                          p: { xs: 2, sm: 2.5 },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Avatar
+                              src={toAbsoluteResource(trader.avatar_url ?? undefined)}
+                              sx={{ width: 40, height: 40 }}
+                            >
+                              {traderDisplayName.split(' ').slice(0, 2).map((p: string) => p.charAt(0).toUpperCase()).join('') || 'T'}
+                            </Avatar>
+                            <Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                  {traderDisplayName}
+                                </Typography>
+                                <Chip label="SETTLEMENT PENDING" color="warning" size="small" sx={{ fontWeight: 600 }} />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {trader.specialty || "Cryptocurrency Trader"}{traderCodeVal ? ` • Code: ${traderCodeVal}` : ''}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
+                            gap: 2,
+                            p: 1.5,
+                            borderRadius: 1.5,
+                            bgcolor: 'background.paper',
+                            mb: 2,
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Held Released Equity
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 700, color: 'warning.dark' }}>
+                              {formatCurrency(heldEquity)}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Session Profit
+                            </Typography>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontWeight: 700,
+                                color: sessionProfit >= 0 ? 'success.main' : 'error.main',
+                              }}
+                            >
+                              {formatCurrency(sessionProfit)}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Commission Due
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 700, color: 'error.main' }}>
+                              {formatCurrency(commissionDue)}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ p: 1.5, bgcolor: 'background.paper', borderRadius: 1.5, mb: 2 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.primary', display: 'block', mb: 0.5 }}>
+                            Why does my Copy Trading Wallet show $0.00?
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.5 }}>
+                            Your session equity of <strong>{formatCurrency(heldEquity)}</strong> was safely liquidated when you stopped copying. In accordance with copy trading terms, realized profit is subject to trader commission ({formatCurrency(commissionDue)}). As soon as your commission payment is verified on the blockchain, your full equity of <strong>{formatCurrency(heldEquity)}</strong> will be immediately unlocked and credited to your Copy Trading Wallet.
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={() => handleOpenCommissionModal(trader)}
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Pay Commission ({formatCurrency(commissionDue)})
+                          </Button>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              ) : stoppedWithoutHeldEquity.length > 0 ? (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <PeopleIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="body1" sx={{ fontWeight: 500, color: 'text.secondary' }}>
+                    No Active Copy Relationships
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 400, mx: 'auto' }}>
+                    All previous copy sessions have ended and settled. Enter a trader code below to start copying a new trader.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <PeopleIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    You're not copying any traders yet
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Start by entering a trader code below
+                  </Typography>
+                </Box>
+              )
             ) : (
               <Stack spacing={2}>
+                {stoppedWithHeldEquity.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1 }}>
+                      Pending Settlements ({stoppedWithHeldEquity.length})
+                    </Typography>
+                    {stoppedWithHeldEquity.map((trader: any) => {
+                      const traderDisplayName = trader.displayName || trader.display_name || "Trader";
+                      const heldEquity = Number(trader.held_released_equity) || Number(trader.allocation) || 0;
+                      const commissionDue = Number(trader.commission_due) || 0;
+                      return (
+                        <Box
+                          key={trader.copy_id || trader.id}
+                          sx={{
+                            borderRadius: 2,
+                            border: 1,
+                            borderColor: 'warning.light',
+                            bgcolor: 'warning.lighter',
+                            p: 2,
+                            mb: 2,
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {traderDisplayName}
+                              </Typography>
+                              <Chip label="SETTLEMENT PENDING" color="warning" size="small" />
+                            </Box>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="primary"
+                              onClick={() => handleOpenCommissionModal(trader)}
+                            >
+                              Pay Commission ({formatCurrency(commissionDue)})
+                            </Button>
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            Held Equity: <strong>{formatCurrency(heldEquity)}</strong> • Commission Due: <strong>{formatCurrency(commissionDue)}</strong>
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
                 {visibleTraders.map((trader) => (
                   <motion.div
                     key={trader.copy_id}
@@ -976,7 +1249,7 @@ const FundCopyWallet = () => {
             Main Wallet).
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Do you want to proceed?
+            If this session generated net profits, performance commission will be due upon completion. Liquidated equity will be securely held in escrow until the commission is verified.
           </Typography>
         </DialogContent>
         <DialogActions>

@@ -11,8 +11,8 @@ from typing import Any, cast
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 from jwt import InvalidTokenError
 from pydantic import ValidationError, computed_field
-from sqlmodel import SQLModel, Session, func, select, col
 from sqlalchemy import desc
+from sqlmodel import Session, SQLModel, col, func, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core import security
@@ -56,7 +56,9 @@ def _extract_specialty(trading_strategy: str | None) -> str:
 def _format_performance(trader: TraderProfile) -> tuple[str, str]:
     metrics = trader.performance_metrics or {}
     win_rate = metrics.get("win_rate")
-    avg_return = trader.average_monthly_return or metrics.get("average_return_per_trade")
+    avg_return = trader.average_monthly_return or metrics.get(
+        "average_return_per_trade"
+    )
 
     win_rate_str = f"{float(win_rate):.0f}%" if win_rate is not None else "N/A"
 
@@ -79,19 +81,16 @@ def _normalize_trader_code(trader_code: str | None) -> str | None:
     return normalized or None
 
 
-def _build_trader_summary(trader: TraderProfile) -> "TraderSummary":
+def _build_trader_summary(trader: TraderProfile) -> TraderSummary:
     performance, win_rate = _format_performance(trader)
 
     stored_code = _normalize_trader_code(trader.trader_code)
     trader_code = stored_code or str(trader.id).replace("-", "").upper()[:8]
 
-    display_name = (
-        trader.display_name
-        or (
-            trader.user.full_name
-            if isinstance(trader.user, User) and trader.user.full_name
-            else f"Trader {trader_code}"
-        )
+    display_name = trader.display_name or (
+        trader.user.full_name
+        if isinstance(trader.user, User) and trader.user.full_name
+        else f"Trader {trader_code}"
     )
     specialty = _extract_specialty(trader.trading_strategy)
 
@@ -119,17 +118,25 @@ def _find_trader_by_code(session: SessionDep, trader_code: str) -> TraderProfile
     return trader
 
 
-def _build_copied_trader(copy: UserTraderCopy) -> "CopiedTraderSummary":
+def _build_copied_trader(copy: UserTraderCopy) -> CopiedTraderSummary:
     if copy.trader_profile is None:
-        raise HTTPException(status_code=500, detail="Associated trader profile not loaded")
+        raise HTTPException(
+            status_code=500, detail="Associated trader profile not loaded"
+        )
 
     summary = _build_trader_summary(copy.trader_profile)
+    settings = copy.copy_settings or {}
     return CopiedTraderSummary(
         **summary.dict(),
         copy_id=copy.id,
         allocation=copy.copy_amount,
         status=copy.copy_status,
+        session_profit=float(settings.get("session_profit") or 0.0),
+        commission_due=float(settings.get("commission_due") or 0.0),
+        held_released_equity=float(settings.get("held_released_equity") or 0.0),
+        equity_released=bool(settings.get("equity_released", True)),
     )
+
 
 def _record_balance_delta(
     session: SessionDep,
@@ -147,7 +154,6 @@ def _record_balance_delta(
         executed_at=utc_now(),
     )
     session.add(transaction)
-
 
 
 class TraderSummary(SQLModel):
@@ -170,7 +176,7 @@ class TraderSummary(SQLModel):
 
     @computed_field(return_type=str, alias="riskLevel")
     def risk_level_camel(self) -> str:
-        value = getattr(self.risk_level, 'value', None)
+        value = getattr(self.risk_level, "value", None)
         return value if value is not None else str(self.risk_level)
 
     @computed_field(return_type=str, alias="winRate")
@@ -205,6 +211,10 @@ class CopiedTraderSummary(TraderSummary):
     copy_id: uuid.UUID
     allocation: float
     status: CopyStatus
+    session_profit: float = 0.0
+    commission_due: float = 0.0
+    held_released_equity: float = 0.0
+    equity_released: bool = True
 
 
 class CopiedTradersResponse(SQLModel):
@@ -229,6 +239,8 @@ class CopyTradingSummaryResponse(SQLModel):
     paused_positions: int
     stopped_positions: int
     positions: list[CopyTradingPositionSummary]
+    total_held_equity: float = 0.0
+    total_commission_due: float = 0.0
 
 
 class FundWalletRequest(SQLModel):
@@ -281,7 +293,6 @@ class ExecutionFeedResponse(SQLModel):
     @computed_field(return_type=str | None, alias="latestCursor")
     def latest_cursor_iso(self) -> str | None:
         return self.latest_cursor.isoformat() if self.latest_cursor else None
-
 
 
 DEFAULT_EXECUTION_POLL_SECONDS = 2.0
@@ -393,7 +404,9 @@ def get_copy_trading_user_summary(
     """
 
     # Ensure wallet balances are loaded
-    session.refresh(current_user, attribute_names=["wallet_balance", "copy_trading_wallet"])  # type: ignore[arg-type]
+    session.refresh(
+        current_user, attribute_names=["wallet_balance", "copy_trading_wallet"]
+    )  # type: ignore[arg-type]
     wallet_balance = float(current_user.wallet_balance or current_user.balance or 0.0)
     copy_trading_wallet_balance = (
         float(current_user.copy_trading_wallet.balance or 0.0)
@@ -411,6 +424,8 @@ def get_copy_trading_user_summary(
     active_positions = 0
     paused_positions = 0
     stopped_positions = 0
+    total_held_equity = 0.0
+    total_commission_due = 0.0
 
     for copy in copies:
         # Status tallies
@@ -422,6 +437,14 @@ def get_copy_trading_user_summary(
             stopped_positions += 1
 
         allocation = float(copy.copy_amount or 0.0)
+        settings = dict(copy.copy_settings or {})
+        held_equity = float(settings.get("held_released_equity") or 0.0)
+        comm_due = float(settings.get("commission_due") or 0.0)
+        eq_rel = bool(settings.get("equity_released", True))
+
+        if copy.copy_status == CopyStatus.STOPPED and not eq_rel and held_equity > 0:
+            total_held_equity += held_equity
+            total_commission_due += comm_due
 
         # Ensure trader profile is loaded for summary building
         session.refresh(copy, attribute_names=["trader_profile"])  # type: ignore[arg-type]
@@ -461,7 +484,9 @@ def get_copy_trading_user_summary(
         wins = int(session.exec(wins_stmt).one() or 0)
         session_win_rate = (wins / trade_count * 100.0) if trade_count > 0 else 0.0
 
-        roi_percentage = (position_profit / allocation * 100.0) if allocation > 0 else 0.0
+        roi_percentage = (
+            (position_profit / allocation * 100.0) if allocation > 0 else 0.0
+        )
 
         trader_summary = _build_trader_summary(copy.trader_profile)
         position = CopyTradingPositionSummary(
@@ -473,6 +498,12 @@ def get_copy_trading_user_summary(
             roi_percentage=round(roi_percentage, 2),
             session_trade_count=trade_count,
             session_win_rate=round(session_win_rate, 2),
+            session_profit=round(
+                float(settings.get("session_profit") or position_profit or 0.0), 2
+            ),
+            commission_due=round(comm_due, 2),
+            held_released_equity=round(held_equity, 2),
+            equity_released=eq_rel,
         )
         positions.append(position)
 
@@ -495,6 +526,8 @@ def get_copy_trading_user_summary(
         paused_positions=paused_positions,
         stopped_positions=stopped_positions,
         positions=positions,
+        total_held_equity=round(total_held_equity, 2),
+        total_commission_due=round(total_commission_due, 2),
     )
 
 
@@ -539,15 +572,15 @@ def _apply_status_transition(
     else:
         trader.total_copiers = (trader.total_copiers or 0) + 1
         trader.total_assets_under_copy = (
-            (trader.total_assets_under_copy or 0.0) + copy.copy_amount
-        )
+            trader.total_assets_under_copy or 0.0
+        ) + copy.copy_amount
 
 
 @router.post("/verify", response_model=TraderVerificationResponse)
 def verify_trader_code(
     *,
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUser,  # noqa: ARG001
     payload: TraderVerificationRequest,
 ) -> Any:
     """Validate a trader code and return a summary if the trader exists and is public."""
@@ -608,27 +641,39 @@ async def request_copy_trading_withdrawal(
     # KYC gate: withdrawals require APPROVED status
     try:
         from app.models import KycStatus  # local import to avoid circulars
+
         if current_user.kyc_status != KycStatus.APPROVED:
-            raise HTTPException(status_code=403, detail="Withdrawals require KYC approval")
+            raise HTTPException(
+                status_code=403, detail="Withdrawals require KYC approval"
+            )
     except Exception:
         # If enum comparison fails for any reason, fall back to string check
         if getattr(current_user, "kyc_status", None) not in ("APPROVED",):
-            raise HTTPException(status_code=403, detail="Withdrawals require KYC approval")
+            raise HTTPException(
+                status_code=403, detail="Withdrawals require KYC approval"
+            )
     # Validate amount
     try:
         amount = round(float(payload.amount or 0), 2)
     except Exception:
         amount = 0.0
     if amount <= 0:
-        raise HTTPException(status_code=400, detail="Withdrawal amount must be greater than 0")
+        raise HTTPException(
+            status_code=400, detail="Withdrawal amount must be greater than 0"
+        )
 
     # Ensure copy trading wallet is loaded/created
     session.refresh(current_user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     wallet = current_user.copy_trading_wallet
-    wallet_balance = float(wallet.balance) if wallet and wallet.balance is not None else 0.0
+    wallet_balance = (
+        float(wallet.balance) if wallet and wallet.balance is not None else 0.0
+    )
 
     if amount > wallet_balance:
-        raise HTTPException(status_code=400, detail=f"Insufficient copy trading wallet balance. Available: ${wallet_balance:.2f}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient copy trading wallet balance. Available: ${wallet_balance:.2f}",
+        )
 
     # Create pending withdrawal transaction (no funds moved yet)
     tx = Transaction(
@@ -673,11 +718,18 @@ async def fund_wallet(
     # Optional gate: block funding when KYC is REJECTED per policy
     try:
         from app.models import KycStatus  # local import
+
         if current_user.kyc_status == KycStatus.REJECTED:
-            raise HTTPException(status_code=403, detail="Account restricted. Contact support to resolve KYC status.")
+            raise HTTPException(
+                status_code=403,
+                detail="Account restricted. Contact support to resolve KYC status.",
+            )
     except Exception:
         if str(getattr(current_user, "kyc_status", "")).upper() == "REJECTED":
-            raise HTTPException(status_code=403, detail="Account restricted. Contact support to resolve KYC status.")
+            raise HTTPException(
+                status_code=403,
+                detail="Account restricted. Contact support to resolve KYC status.",
+            )
     amount = round(float(payload.amount or 0), 2)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -686,7 +738,10 @@ async def fund_wallet(
     session.refresh(current_user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     if current_user.copy_trading_wallet is None:
         from app.models import CopyTradingWallet  # avoid circular import
-        current_user.copy_trading_wallet = CopyTradingWallet(user_id=current_user.id, balance=0.0)
+
+        current_user.copy_trading_wallet = CopyTradingWallet(
+            user_id=current_user.id, balance=0.0
+        )
         session.add(current_user.copy_trading_wallet)
 
     main_available = float(current_user.wallet_balance or current_user.balance or 0.0)
@@ -715,6 +770,7 @@ async def fund_wallet(
 
     # Execution event for feed
     from app.services.execution_events import record_execution_event
+
     await record_execution_event(
         session,
         event_type=ExecutionEventType.MANUAL_ADJUSTMENT,
@@ -725,7 +781,9 @@ async def fund_wallet(
     )
 
     session.commit()
-    session.refresh(current_user, attribute_names=["wallet_balance", "copy_trading_wallet"])  # type: ignore[arg-type]
+    session.refresh(
+        current_user, attribute_names=["wallet_balance", "copy_trading_wallet"]
+    )  # type: ignore[arg-type]
 
     # Notify user about internal wallet transfer
     email_wallet_transfer(
@@ -740,7 +798,9 @@ async def fund_wallet(
         success=True,
         message="Copy trading wallet funded",
         wallet_balance=float(current_user.wallet_balance or 0.0),
-        copy_trading_wallet_balance=float(current_user.copy_trading_wallet.balance or 0.0),
+        copy_trading_wallet_balance=float(
+            current_user.copy_trading_wallet.balance or 0.0
+        ),
     )
 
 
@@ -766,13 +826,19 @@ def start_copy_trading(
         raise HTTPException(status_code=404, detail="Trader not found")
 
     if not trader.is_public:
-        raise HTTPException(status_code=400, detail="Trader is not available for copying")
+        raise HTTPException(
+            status_code=400, detail="Trader is not available for copying"
+        )
 
     if trader.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="You cannot copy your own trader profile")
+        raise HTTPException(
+            status_code=400, detail="You cannot copy your own trader profile"
+        )
 
     if payload.allocation_amount <= 0:
-        raise HTTPException(status_code=400, detail="Allocation amount must be greater than zero")
+        raise HTTPException(
+            status_code=400, detail="Allocation amount must be greater than zero"
+        )
 
     if payload.allocation_amount < trader.minimum_copy_amount:
         raise HTTPException(
@@ -789,14 +855,21 @@ def start_copy_trading(
     ).first()
 
     if existing_copy:
-        raise HTTPException(status_code=400, detail="You are already copying this trader")
+        raise HTTPException(
+            status_code=400, detail="You are already copying this trader"
+        )
 
     # Validate available funds (prefer copy_trading_wallet, fall back to wallet_balance/legacy balance)
-    session.refresh(current_user, attribute_names=["copy_trading_wallet", "wallet_balance"])  # type: ignore[arg-type]
+    session.refresh(
+        current_user, attribute_names=["copy_trading_wallet", "wallet_balance"]
+    )  # type: ignore[arg-type]
     main_available = float(current_user.wallet_balance or current_user.balance or 0.0)
     if current_user.copy_trading_wallet is None:
         from app.models import CopyTradingWallet  # avoid circular import
-        current_user.copy_trading_wallet = CopyTradingWallet(user_id=current_user.id, balance=0.0)
+
+        current_user.copy_trading_wallet = CopyTradingWallet(
+            user_id=current_user.id, balance=0.0
+        )
         session.add(current_user.copy_trading_wallet)
         session.flush()
     wallet_balance = float(current_user.copy_trading_wallet.balance or 0.0)
@@ -811,7 +884,9 @@ def start_copy_trading(
     use_from_wallet = min(wallet_balance, payload.allocation_amount)
     remaining = round(payload.allocation_amount - use_from_wallet, 2)
     wallet_balance_after = round(wallet_balance - use_from_wallet, 2)
-    main_after = round(main_available - remaining, 2) if remaining > 0 else main_available
+    main_after = (
+        round(main_available - remaining, 2) if remaining > 0 else main_available
+    )
 
     allocation_amount = round(payload.allocation_amount, 2)
 
@@ -829,12 +904,16 @@ def start_copy_trading(
     current_user.copy_trading_wallet.balance = wallet_balance_after
     current_user.wallet_balance = main_after
     current_user.balance = main_after
-    current_user.copy_trading_balance = round(float(current_user.copy_trading_balance or 0.0) + allocation_amount, 2)
+    current_user.copy_trading_balance = round(
+        float(current_user.copy_trading_balance or 0.0) + allocation_amount, 2
+    )
     session.add(current_user)
     session.add(current_user.copy_trading_wallet)
 
     trader.total_copiers = (trader.total_copiers or 0) + 1
-    trader.total_assets_under_copy = (trader.total_assets_under_copy or 0.0) + allocation_amount
+    trader.total_assets_under_copy = (
+        trader.total_assets_under_copy or 0.0
+    ) + allocation_amount
     session.add(trader)
 
     _record_balance_delta(
@@ -858,7 +937,14 @@ def start_copy_trading(
     except Exception:
         # Do not block main flow on notification failures
         pass
-    session.refresh(current_user, attribute_names=["copy_trading_wallet", "copy_trading_balance", "wallet_balance"])  # type: ignore[arg-type]
+    session.refresh(
+        current_user,
+        attribute_names=[
+            "copy_trading_wallet",
+            "copy_trading_balance",
+            "wallet_balance",
+        ],
+    )  # type: ignore[arg-type]
     session.refresh(copy_entry, attribute_names=["trader_profile"])
     session.refresh(copy_entry, attribute_names=["user"])
     session.refresh(trader, attribute_names=["user"])
@@ -874,7 +960,9 @@ def start_copy_trading(
     return CopyTradingStartResponse(
         success=True,
         message=message,
-        available_balance=float(current_user.wallet_balance or current_user.balance or 0.0),
+        available_balance=float(
+            current_user.wallet_balance or current_user.balance or 0.0
+        ),
         copied_trader=copied_summary,
     )
 
@@ -892,7 +980,9 @@ def pause_copy_relationship(
     previous_status = copy.copy_status
 
     if previous_status == CopyStatus.STOPPED:
-        raise HTTPException(status_code=400, detail="Copy relationship is already stopped")
+        raise HTTPException(
+            status_code=400, detail="Copy relationship is already stopped"
+        )
 
     if previous_status == CopyStatus.PAUSED:
         copied_summary = _build_copied_trader(copy)
@@ -955,28 +1045,41 @@ def stop_copy_relationship(
         copied_summary = _build_copied_trader(copy)
         held_equity = 0.0
         if copy.copy_settings:
-            held_equity = float(copy.copy_settings.get("held_released_equity", 0.0) or 0.0)
+            held_equity = float(
+                copy.copy_settings.get("held_released_equity", 0.0) or 0.0
+            )
         return CopyTradingUpdateResponse(
             success=True,
             message="Copy relationship already stopped",
-            available_balance=float(copy.user.copy_trading_wallet.balance) if getattr(copy.user, "copy_trading_wallet", None) else 0.0,
+            available_balance=float(copy.user.copy_trading_wallet.balance)
+            if getattr(copy.user, "copy_trading_wallet", None)
+            else 0.0,
             copied_trader=copied_summary,
             commission_due=0.0,
             session_profit=0.0,
-            copy_fee_percentage=float(copy.trader_profile.copy_fee_percentage or 0.0) if copy.trader_profile else 0.0,
-            trader_name=copy.trader_profile.display_name if copy.trader_profile else None,
+            copy_fee_percentage=float(copy.trader_profile.copy_fee_percentage or 0.0)
+            if copy.trader_profile
+            else 0.0,
+            trader_name=copy.trader_profile.display_name
+            if copy.trader_profile
+            else None,
             released_equity=held_equity,
         )
 
     # Ensure user and copy_trading_wallet are loaded
     session.refresh(copy, attribute_names=["user"])  # ensure user loaded
     if not copy.user:
-        raise HTTPException(status_code=404, detail="User not found for copy relationship")
+        raise HTTPException(
+            status_code=404, detail="User not found for copy relationship"
+        )
 
     session.refresh(copy.user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     if copy.user.copy_trading_wallet is None:
         from app.models import CopyTradingWallet  # avoid circular import
-        copy.user.copy_trading_wallet = CopyTradingWallet(user_id=copy.user.id, balance=0.0)
+
+        copy.user.copy_trading_wallet = CopyTradingWallet(
+            user_id=copy.user.id, balance=0.0
+        )
         session.add(copy.user.copy_trading_wallet)
         session.flush()
 
@@ -989,7 +1092,11 @@ def stop_copy_relationship(
         .where(ExecutionEvent.created_at >= copy.copy_started_at)
     )
     session_profit = round(float(session.exec(profit_stmt).one() or 0.0), 2)
-    copy_fee_pct = float(copy.trader_profile.copy_fee_percentage or 0.0) if copy.trader_profile else 0.0
+    copy_fee_pct = (
+        float(copy.trader_profile.copy_fee_percentage or 0.0)
+        if copy.trader_profile
+        else 0.0
+    )
 
     if session_profit > 0 and copy_fee_pct > 0:
         commission_due = round(session_profit * (copy_fee_pct / 100.0), 2)
@@ -1005,12 +1112,24 @@ def stop_copy_relationship(
             )
         ).all()
         for tx in existing_txs:
-            if tx.metadata_payload and str(tx.metadata_payload.get("copy_id")) == str(copy.id):
-                if tx.status in (TransactionStatus.COMPLETED, TransactionStatus.PENDING):
+            if tx.metadata_payload and str(tx.metadata_payload.get("copy_id")) == str(
+                copy.id
+            ):
+                if tx.status in (
+                    TransactionStatus.COMPLETED,
+                    TransactionStatus.PENDING,
+                ):
                     commission_due = 0.0
                     break
-            elif tx.description and str(copy.id) in tx.description and "commission" in tx.description.lower():
-                if tx.status in (TransactionStatus.COMPLETED, TransactionStatus.PENDING):
+            elif (
+                tx.description
+                and str(copy.id) in tx.description
+                and "commission" in tx.description.lower()
+            ):
+                if tx.status in (
+                    TransactionStatus.COMPLETED,
+                    TransactionStatus.PENDING,
+                ):
                     commission_due = 0.0
                     break
 
@@ -1048,7 +1167,9 @@ def stop_copy_relationship(
         settings["equity_released"] = False
     else:
         wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
-        copy.user.copy_trading_wallet.balance = round(wallet_balance + release_amount, 2)
+        copy.user.copy_trading_wallet.balance = round(
+            wallet_balance + release_amount, 2
+        )
         settings["held_released_equity"] = 0.0
         settings["commission_due"] = 0.0
         settings["equity_released"] = True
@@ -1078,7 +1199,9 @@ def stop_copy_relationship(
         if copy.trader_profile and copy.trader_profile.display_name
         else (
             copy.trader_profile.user.full_name
-            if copy.trader_profile and copy.trader_profile.user and copy.trader_profile.user.full_name
+            if copy.trader_profile
+            and copy.trader_profile.user
+            and copy.trader_profile.user.full_name
             else "Trader"
         )
     )
@@ -1125,7 +1248,9 @@ def reduce_copy_allocation(
     """
     copy = _load_copy_relationship(session, current_user, copy_id)
     if copy.copy_status == CopyStatus.STOPPED:
-        raise HTTPException(status_code=400, detail="Cannot reduce a stopped copy relationship")
+        raise HTTPException(
+            status_code=400, detail="Cannot reduce a stopped copy relationship"
+        )
 
     try:
         amount = float(payload.amount)
@@ -1134,16 +1259,23 @@ def reduce_copy_allocation(
     amount = round(amount, 2)
     # Whole dollars
     if amount <= 0 or abs(amount - round(amount)) > 1e-9:
-        raise HTTPException(status_code=400, detail="Reduction amount must be a positive whole dollar amount")
+        raise HTTPException(
+            status_code=400,
+            detail="Reduction amount must be a positive whole dollar amount",
+        )
 
     current_allocation = float(copy.copy_amount or 0.0)
     if amount > current_allocation:
-        raise HTTPException(status_code=400, detail="Reduction exceeds current allocation")
+        raise HTTPException(
+            status_code=400, detail="Reduction exceeds current allocation"
+        )
 
     remaining = round(current_allocation - amount, 2)
     if remaining <= 0:
         # Route to full stop logic
-        return stop_copy_relationship(session=session, current_user=current_user, copy_id=copy_id)
+        return stop_copy_relationship(
+            session=session, current_user=current_user, copy_id=copy_id
+        )
 
     # Enforce floor: remaining >= max($100, 10% of current)
     floor_amount = max(100.0, round(0.10 * current_allocation, 2))
@@ -1156,14 +1288,21 @@ def reduce_copy_allocation(
     # Apply balance moves: allocated -> Copy Trading Wallet
     session.refresh(copy, attribute_names=["user"])  # ensure user loaded
     if not copy.user:
-        raise HTTPException(status_code=404, detail="User not found for copy relationship")
+        raise HTTPException(
+            status_code=404, detail="User not found for copy relationship"
+        )
 
     copy.copy_amount = remaining
-    copy.user.copy_trading_balance = round(float(copy.user.copy_trading_balance or 0.0) - amount, 2)
+    copy.user.copy_trading_balance = round(
+        float(copy.user.copy_trading_balance or 0.0) - amount, 2
+    )
     session.refresh(copy.user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     if copy.user.copy_trading_wallet is None:
         from app.models import CopyTradingWallet  # avoid circular import
-        copy.user.copy_trading_wallet = CopyTradingWallet(user_id=copy.user.id, balance=0.0)
+
+        copy.user.copy_trading_wallet = CopyTradingWallet(
+            user_id=copy.user.id, balance=0.0
+        )
         session.add(copy.user.copy_trading_wallet)
         session.flush()
     ct_wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
@@ -1179,7 +1318,9 @@ def reduce_copy_allocation(
         description="Copy trading allocation reduced",
     )
     session.commit()
-    session.refresh(copy, attribute_names=["trader_profile"])  # ensure trader loaded for response
+    session.refresh(
+        copy, attribute_names=["trader_profile"]
+    )  # ensure trader loaded for response
     session.refresh(copy.user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
 
     copied_summary = _build_copied_trader(copy)
@@ -1214,7 +1355,9 @@ def resume_copy_relationship(
         )
 
     if previous_status == CopyStatus.STOPPED:
-        raise HTTPException(status_code=400, detail="Stopped copy relationships cannot be resumed")
+        raise HTTPException(
+            status_code=400, detail="Stopped copy relationships cannot be resumed"
+        )
 
     copy.copy_status = CopyStatus.ACTIVE
     _apply_status_transition(copy, CopyStatus.ACTIVE, previous_status=previous_status)
@@ -1335,7 +1478,9 @@ async def execution_feed_live(websocket: WebSocket) -> None:
                 )
 
                 if latest_cursor is not None:
-                    statement = statement.where(ExecutionEvent.created_at >= latest_cursor)
+                    statement = statement.where(
+                        ExecutionEvent.created_at >= latest_cursor
+                    )
 
                 events = session.exec(statement).all()
 
@@ -1345,7 +1490,9 @@ async def execution_feed_live(websocket: WebSocket) -> None:
                     if event_id in sent_ids:
                         continue
 
-                    feed_event = _serialize_execution_event(session, event, profile_cache)
+                    feed_event = _serialize_execution_event(
+                        session, event, profile_cache
+                    )
                     new_events.append(feed_event)
                     sent_ids.append(event_id)
                     if latest_cursor is None or feed_event.created_at > latest_cursor:
@@ -1355,8 +1502,12 @@ async def execution_feed_live(websocket: WebSocket) -> None:
                     await websocket.send_json(
                         {
                             "type": "execution_events",
-                            "events": [item.model_dump(mode="json") for item in new_events],
-                            "latest_cursor": latest_cursor.isoformat() if latest_cursor else None,
+                            "events": [
+                                item.model_dump(mode="json") for item in new_events
+                            ],
+                            "latest_cursor": latest_cursor.isoformat()
+                            if latest_cursor
+                            else None,
                         }
                     )
 
@@ -1380,9 +1531,8 @@ def copy_trading_summary(
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    statement = (
-        select(UserTraderCopy.copy_status, func.count())
-        .group_by(UserTraderCopy.copy_status)
+    statement = select(UserTraderCopy.copy_status, func.count()).group_by(
+        UserTraderCopy.copy_status
     )
 
     counts: dict[CopyStatus, int] = {status: 0 for status in CopyStatus}
@@ -1455,10 +1605,12 @@ def get_copy_trading_history(
         select(ExecutionEvent)
         .where(
             ExecutionEvent.user_id == current_user.id,
-            cast(Any, ExecutionEvent.event_type).in_([
-                ExecutionEventType.FOLLOWER_PROFIT,
-                ExecutionEventType.TRADER_SIMULATION,
-            ]),
+            cast(Any, ExecutionEvent.event_type).in_(
+                [
+                    ExecutionEventType.FOLLOWER_PROFIT,
+                    ExecutionEventType.TRADER_SIMULATION,
+                ]
+            ),
         )
         .order_by(desc(col(ExecutionEvent.created_at)))
     )
@@ -1491,7 +1643,7 @@ def get_copy_trading_history(
             trader_display_name, trader_code = cached
 
         payload = event.payload or {}
-        
+
         # Fallback to payload data if trader info not found via profile
         if trader_display_name is None:
             name_value = payload.get("trader_display_name")
@@ -1520,17 +1672,19 @@ def get_copy_trading_history(
             except (ValueError, TypeError):
                 pass
 
-        history_events.append(CopyTradingHistoryEvent(
-            id=event.id,
-            event_type=event.event_type,
-            description=event.description,
-            amount=float(event.amount or 0.0),
-            roi_percent=roi_percent,
-            symbol=symbol,
-            trader_display_name=trader_display_name,
-            trader_code=trader_code,
-            created_at=event.created_at,
-        ))
+        history_events.append(
+            CopyTradingHistoryEvent(
+                id=event.id,
+                event_type=event.event_type,
+                description=event.description,
+                amount=float(event.amount or 0.0),
+                roi_percent=roi_percent,
+                symbol=symbol,
+                trader_display_name=trader_display_name,
+                trader_code=trader_code,
+                created_at=event.created_at,
+            )
+        )
 
     total_pages = max(1, (total + page_size - 1) // page_size)
 

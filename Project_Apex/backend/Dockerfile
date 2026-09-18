@@ -35,4 +35,4 @@ RUN mkdir -p static storage app/static
 
 # 8. Start the App
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/bin/bash", "-c", "bash scripts/prestart.sh && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

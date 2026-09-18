@@ -14,4 +14,6 @@ export type CopyTradingSummaryResponse = {
     paused_positions: number;
     stopped_positions: number;
     positions: Array<CopyTradingPositionSummary>;
+    total_held_equity?: number;
+    total_commission_due?: number;
 };

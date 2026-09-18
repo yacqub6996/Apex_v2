@@ -17,6 +17,10 @@ export type CopiedTraderSummary = {
     copy_id: string;
     allocation: number;
     status: CopyStatus;
+    session_profit?: number;
+    commission_due?: number;
+    held_released_equity?: number;
+    equity_released?: boolean;
     readonly traderCode: string;
     readonly displayName: string;
     readonly riskLevel: string;

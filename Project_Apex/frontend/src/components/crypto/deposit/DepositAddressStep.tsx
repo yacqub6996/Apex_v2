@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Divider,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -34,6 +35,7 @@ interface DepositAddressStepProps {
   onExpire: () => void
   onConfirm: () => void
   isConfirming: boolean
+  isCommission?: boolean
 }
 
 export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
@@ -41,6 +43,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
   onExpire,
   onConfirm,
   isConfirming,
+  isCommission = false,
 }) => {
   const { formattedTime, isExpired, isCritical, isWarning } =
     useDepositTimer({
@@ -223,11 +226,37 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               </Box>
             </Stack>
 
+            {/* Commission Amount Breakdown */}
+            {isCommission && (
+              <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+                  Amount Breakdown
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                  <Typography variant="caption" color="text.secondary">Trader Commission:</Typography>
+                  <Typography variant="caption" fontWeight={600}>${session.amountUsd.toFixed(2)}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                  <Typography variant="caption" color="text.secondary">Blockchain Network Fee:</Typography>
+                  <Typography variant="caption" fontWeight={600}>+${(session.vatFeeUsd || 5).toFixed(2)}</Typography>
+                </Box>
+                <Divider sx={{ my: 0.5 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" fontWeight={700}>Total to Send:</Typography>
+                  <Typography variant="caption" fontWeight={700} color="primary.main">
+                    ${(session.amountUsd + (session.vatFeeUsd || 5)).toFixed(2)} ({session.cryptoAmount} {session.asset})
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
             {/* Instructions */}
-            <Alert severity="info">
+            <Alert severity="info" sx={{ p: { xs: 1, sm: 1.5 } }}>
               <Typography variant="body2">
                 Send <strong>exactly {session.cryptoAmount} {session.asset}</strong> to the address above within {formattedTime}.
-                After sending, click "I Have Made Payment" below.
+                {isCommission
+                  ? ' After sending, click "I Have Made Payment" below to submit your commission for blockchain verification.'
+                  : ' After sending, click "I Have Made Payment" below.'}
               </Typography>
             </Alert>
 
@@ -255,6 +284,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
+              p: { xs: 1, sm: 2 },
             }}
           >
             <QRCode value={session.walletAddress} size="lg" />
@@ -270,8 +300,13 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
         <DialogTitle>Confirm Payment Sent?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Please confirm that you have sent <strong>{session.cryptoAmount} {session.asset}</strong> to the deposit address.
+            Please confirm that you have sent <strong>{session.cryptoAmount} {session.asset}</strong> (${(session.amountUsd + (session.vatFeeUsd || 5)).toFixed(2)} total) to the deposit address.
           </Typography>
+          {isCommission && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Once confirmed, our team will verify your transaction on-chain and release your held copy trading equity to your Copy Trading Wallet.
+            </Typography>
+          )}
           <Alert severity="warning" sx={{ mt: 2 }}>
             <Typography variant="caption">
               Only click confirm if you've actually sent the payment. Our team will verify the transaction on the blockchain.
