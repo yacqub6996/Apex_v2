@@ -19,6 +19,7 @@ import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/providers/auth-provider";
 import { toAbsoluteResource } from "@/utils/url";
 import { CopyTradingService } from "@/api/services/CopyTradingService";
+import { TransactionsService } from "@/api/services/TransactionsService";
 import type { CopiedTraderSummary } from "@/api/models/CopiedTraderSummary";
 import type { CopyTradingStartResponse } from "@/api/models/CopyTradingStartResponse";
 import type { CopyTradingUpdateResponse } from "@/api/models/CopyTradingUpdateResponse";
@@ -174,6 +175,11 @@ const FundCopyWallet = () => {
   const copySummaryQuery = useQuery<CopyTradingSummaryResponse>({
     queryKey: ["copy-trading-summary"],
     queryFn: () => CopyTradingService.copyTradingGetCopyTradingUserSummary(),
+  });
+
+  const pendingSummaryQuery = useQuery({
+    queryKey: ["pending-summary"],
+    queryFn: () => TransactionsService.transactionsGetPendingSummary(),
   });
 
   const copyExecutionsQuery = useQuery({
@@ -395,6 +401,11 @@ const FundCopyWallet = () => {
                     : 0,
                 )}
               </Typography>
+              {(pendingSummaryQuery.data?.copy_trading_wallet_pending ?? 0) > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  Pending Admin Approval: {formatCurrency(pendingSummaryQuery.data?.copy_trading_wallet_pending ?? 0)}
+                </Typography>
+              )}
             </Box>
             <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
               <Typography variant="body2" color="text.secondary">
