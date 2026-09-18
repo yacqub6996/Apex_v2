@@ -242,6 +242,11 @@ export function useDepositFlow(options: UseDepositFlowOptions = {}) {
     setStep('input')
   }, [])
 
+  const handleBackToInput = useCallback(() => {
+    setDepositSession(null)
+    setStep('input')
+  }, [])
+
   const handleExpire = useCallback(() => {
     if (depositSession) {
       setDepositSession({
@@ -259,6 +264,7 @@ export function useDepositFlow(options: UseDepositFlowOptions = {}) {
     handleGenerateAddress,
     handleConfirmPayment,
     handleReset,
+    handleBackToInput,
     handleExpire,
     isGenerating: generateMutation.isPending,
     isConfirming: confirmMutation.isPending,

@@ -157,7 +157,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
           </Box>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.45 }}>
-            Your liquidated equity (${(settlementInfo.heldReleasedEquity ?? 0).toFixed(2)}) is held safely in escrow. Settling this performance commission unlocks your funds and deposits them directly into your <strong>Copy Trading Wallet</strong> upon blockchain confirmation.
+            Your liquidated equity (${(settlementInfo.heldReleasedEquity ?? 0).toFixed(2)}) is held safely in escrow. Settling this performance commission unlocks your funds and deposits them directly into your <strong>Copy Trading Wallet</strong> upon admin confirmation.
           </Typography>
         </Box>
       )}
@@ -323,7 +323,9 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       )}
 
       <Alert severity="info" sx={{ p: { xs: 1, sm: 1.5 }, '& .MuiAlert-message': { fontSize: { xs: '0.75rem', sm: '0.85rem' } } }}>
-        After generating your address, you have 20 minutes to complete payment. Once sent, click "I Have Made Payment" so our team can verify it on-chain.
+        {isCommission
+          ? 'After retrieving the payment address, you have 20 minutes to complete payment. Once sent, click "I Have Made Payment" so our admin team can verify it and release your held funds.'
+          : 'After generating your address, you have 20 minutes to complete payment. Once sent, click "I Have Made Payment" so our admin team can verify it.'}
       </Alert>
     </Stack>
   )

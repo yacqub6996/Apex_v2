@@ -75,11 +75,14 @@ export function useConfirmPayment(): UseMutationResult<TransactionPublic, Error,
     mutationFn: (request: ConfirmPaymentRequest) => 
       CryptoService.cryptoConfirmPaymentSent(request),
     onSuccess: () => {
-      // Invalidate pending deposits and transactions
+      // Invalidate pending deposits, transactions, user balances, and copy trading settlement state
       queryClient.invalidateQueries({ queryKey: cryptoKeys.pendingDeposits() })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['currentUser'] })
       queryClient.invalidateQueries({ queryKey: ['users-me'] })
+      queryClient.invalidateQueries({ queryKey: ['copy-trading-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['copied-traders'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-summary'] })
     },
   })
 }

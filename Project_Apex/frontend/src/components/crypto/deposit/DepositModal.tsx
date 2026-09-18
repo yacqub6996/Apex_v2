@@ -27,6 +27,7 @@ import { DepositPendingStep } from './DepositPendingStep'
 import { KycDepositWarningDialog } from './KycDepositWarningDialog'
 import { useDepositFlow } from '@/hooks/useDeposit'
 import { useAuth } from '@/providers/auth-provider'
+import { extractApiErrorMessage } from '@/utils/errors'
 import type { Asset, NetworkKey } from '@/types/crypto'
 
 interface DepositModalProps {
@@ -38,9 +39,11 @@ interface DepositModalProps {
   subtitle?: string
   metadataPayload?: Record<string, any> | null
   description?: string | null
+  onConfirmSuccess?: () => void
 }
 
-const steps = ['Enter Amount', 'Deposit Address', 'Confirmation']
+const ordinarySteps = ['Enter Amount', 'Deposit Address', 'Confirmation']
+const commissionSteps = ['Commission Details', 'Payment Address', 'Verification']
 
 export const DepositModal: React.FC<DepositModalProps> = ({
   open,
@@ -51,6 +54,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   subtitle,
   metadataPayload,
   description,
+  onConfirmSuccess,
 }) => {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -59,6 +63,9 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   const [showKycWarning, setShowKycWarning] = useState(false)
   const [kycWarningAcknowledged, setKycWarningAcknowledged] = useState(false)
   
+  const [confirmDismissOpen, setConfirmDismissOpen] = useState(false)
+  const [confirmChangeNetworkOpen, setConfirmChangeNetworkOpen] = useState(false)
+
   const {
     depositSession,
     step,
@@ -66,6 +73,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     handleGenerateAddress,
     handleConfirmPayment,
     handleReset,
+    handleBackToInput,
     handleExpire,
     isGenerating,
     isConfirming,
@@ -76,7 +84,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
       // Address generated successfully
     },
     onConfirmSuccess: () => {
-      // Payment confirmed, show success message
+      onConfirmSuccess?.()
     },
     onError: (error) => {
       console.error('Deposit error:', error)
@@ -106,12 +114,37 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     }
   }, [open, user, kycWarningAcknowledged])
 
-  const handleClose = () => {
-    if (step !== 'address' || depositSession?.expired) {
-      handleReset()
-      setKycWarningAcknowledged(false) // Reset for next time
-      onClose()
+  const handlePerformClose = () => {
+    setConfirmDismissOpen(false)
+    setConfirmChangeNetworkOpen(false)
+    handleReset()
+    setKycWarningAcknowledged(false)
+    onClose()
+  }
+
+  const handleRequestClose = () => {
+    if (step === 'address' && depositSession && !depositSession.expired) {
+      setConfirmDismissOpen(true)
+      return
     }
+    handlePerformClose()
+  }
+
+  const handleConfirmDismiss = () => {
+    handlePerformClose()
+  }
+
+  const handleRequestChangeNetwork = () => {
+    if (step === 'address' && depositSession && !depositSession.expired) {
+      setConfirmChangeNetworkOpen(true)
+      return
+    }
+    handleBackToInput()
+  }
+
+  const handleConfirmChangeNetwork = () => {
+    setConfirmChangeNetworkOpen(false)
+    handleBackToInput()
   }
 
   const handleKycWarningProceed = () => {
@@ -171,7 +204,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
       {/* Main Deposit Dialog */}
       <Dialog
         open={open && !showKycWarning}
-        onClose={handleClose}
+        onClose={handleRequestClose}
         maxWidth="md"
         fullWidth
         fullScreen={isMobile}
@@ -226,7 +259,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
             </Box>
             <IconButton
               aria-label="close"
-              onClick={handleClose}
+              onClick={handleRequestClose}
               size="small"
               sx={{
                 color: 'text.secondary',
@@ -252,7 +285,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               },
             }}
           >
-            {steps.map((label) => (
+            {(isCommission ? commissionSteps : ordinarySteps).map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
               </Step>
@@ -273,12 +306,15 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           {/* Error alerts */}
           {generateError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {generateError.message || 'Failed to generate deposit address'}
+              {extractApiErrorMessage(
+                generateError,
+                isCommission ? 'Failed to prepare payment address' : 'Failed to generate deposit address',
+              )}
             </Alert>
           )}
           {confirmError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {confirmError.message || 'Failed to confirm payment'}
+              {extractApiErrorMessage(confirmError, 'Failed to confirm payment')}
             </Alert>
           )}
 
@@ -313,12 +349,13 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               onConfirm={handleConfirmClick}
               isConfirming={isConfirming}
               isCommission={isCommission}
+              onChangeNetwork={handleRequestChangeNetwork}
             />
           )}
 
           {step === 'pending' && (
             <DepositPendingStep
-              onClose={handleClose}
+              onClose={handlePerformClose}
               isCommission={isCommission}
               heldEquity={metadataPayload?.held_released_equity}
               commissionAmount={metadataPayload?.commission_amount || parseFloat(amount) || 0}
@@ -341,44 +378,98 @@ export const DepositModal: React.FC<DepositModalProps> = ({
         >
           {step === 'input' && (
             <>
-              <Button onClick={handleClose} variant="outlined" sx={{ minWidth: 90 }}>
+              <Button onClick={handleRequestClose} variant="outlined" sx={{ minWidth: 90 }}>
                 Cancel
               </Button>
               <Button
                 onClick={handleGenerateClick}
                 variant="contained"
                 disabled={isGenerating || parseFloat(amount) < (isCommission ? 0.01 : 50)}
-                sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 150 }}
+                sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 160 }}
               >
-                {isGenerating ? 'Generating...' : 'Generate Address'}
+                {isGenerating
+                  ? (isCommission ? 'Preparing Address...' : 'Generating...')
+                  : (isCommission ? 'Proceed to Payment' : 'Generate Address')}
               </Button>
             </>
           )}
 
           {step === 'address' && depositSession && (
-            <>
+            <Box sx={{ display: 'flex', width: '100%', gap: 1.5, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <Button
+                onClick={handleRequestChangeNetwork}
+                variant="outlined"
+                color="inherit"
+                sx={{ minWidth: { xs: '100%', sm: 160 } }}
+              >
+                Change Coin / Network
+              </Button>
               {depositSession.expired ? (
                 <Button
                   onClick={handleRegenerateAddress}
                   variant="contained"
                   color="primary"
-                  fullWidth
+                  sx={{ minWidth: { xs: '100%', sm: 160 } }}
                 >
-                  Generate New Address
+                  {isCommission ? 'Renew Address' : 'Generate New Address'}
                 </Button>
               ) : (
-                <Button onClick={handleClose} variant="outlined" fullWidth>
+                <Button onClick={handleRequestClose} variant="outlined" sx={{ minWidth: { xs: '100%', sm: 100 } }}>
                   Close
                 </Button>
               )}
-            </>
+            </Box>
           )}
 
           {step === 'pending' && (
-            <Button onClick={handleClose} variant="contained" fullWidth>
-              Done
+            <Button onClick={handlePerformClose} variant="contained" fullWidth>
+              {isCommission ? 'Return to Copy Trading' : 'Done'}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Dismissing Active Payment */}
+      <Dialog
+        open={confirmDismissOpen}
+        onClose={() => setConfirmDismissOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{isCommission ? 'Dismiss Commission Payment Window?' : 'Dismiss Deposit Window?'}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {isCommission
+              ? 'Your receiving address remains valid for the duration of the 20-minute countdown. You can reopen this window anytime to complete payment or submit confirmation.'
+              : 'Your receiving address remains valid for the duration of the countdown. You can return anytime before it expires to complete your deposit.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDismissOpen(false)}>Stay on Payment</Button>
+          <Button onClick={handleConfirmDismiss} variant="contained" color="warning">
+            Dismiss Window
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Changing Coin/Network */}
+      <Dialog
+        open={confirmChangeNetworkOpen}
+        onClose={() => setConfirmChangeNetworkOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Change Cryptocurrency or Network?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            This will discard the current receiving address and return to network selection so you can choose a different cryptocurrency or network.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmChangeNetworkOpen(false)}>Keep Current Address</Button>
+          <Button onClick={handleConfirmChangeNetwork} variant="contained" color="primary">
+            Change Coin / Network
+          </Button>
         </DialogActions>
       </Dialog>
     </>

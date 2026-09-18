@@ -23,8 +23,10 @@ import { useAuth } from '@/providers/auth-provider';
 import { CopyTradingService } from '@/api/services/CopyTradingService';
 import { WalletTransferDirection } from '@/api/models/WalletTransferDirection';
 import { TransactionsService } from '@/api/services/TransactionsService';
+import { UsersService } from '@/api/services/UsersService';
 import { transferToLongTermWallet } from '@/services/long-term-investment-actions';
 import { requestLongTermWalletWithdrawal } from '@/services/long-term-investment-actions';
+import { extractApiErrorMessage } from '@/utils/errors';
 
 type RouteKey =
   | 'MAIN_TO_COPY'
@@ -44,10 +46,26 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  const isKycApproved = user?.kyc_status === 'APPROVED';
-  const walletBalance = Number((user as any)?.wallet_balance ?? user?.availableBalance ?? 0);
-  const copyWalletBalance = Number((user as any)?.copy_trading_wallet_balance ?? 0);
-  const longTermWalletBalance = Number((user as any)?.long_term_wallet_balance ?? 0);
+  const currentUserQuery = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => UsersService.usersReadUserMe(),
+    enabled: open,
+  });
+
+  const copySummaryQuery = useQuery({
+    queryKey: ['copy-trading-summary'],
+    queryFn: () => CopyTradingService.copyTradingGetCopyTradingUserSummary(),
+    enabled: open,
+  });
+
+  const effectiveUser = (currentUserQuery.data as any) ?? user;
+  const isKycApproved = effectiveUser?.kyc_status === 'APPROVED';
+  const walletBalance = Number(effectiveUser?.wallet_balance ?? effectiveUser?.availableBalance ?? effectiveUser?.balance ?? 0);
+  const copyWalletBalance =
+    typeof copySummaryQuery.data?.copy_trading_wallet_balance === 'number'
+      ? copySummaryQuery.data.copy_trading_wallet_balance
+      : Number(effectiveUser?.copy_trading_wallet_balance ?? 0);
+  const longTermWalletBalance = Number(effectiveUser?.long_term_wallet_balance ?? 0);
 
   const pendingQuery = useQuery({
     queryKey: ['pending-summary'],
@@ -161,6 +179,7 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
     onSuccess: () => {
       // Force a fresh refetch to ensure server state is authoritative
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.invalidateQueries({ queryKey: ['users-me'] });
       queryClient.invalidateQueries({ queryKey: ['long-term-investments'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['pending-summary'] });
@@ -173,8 +192,8 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
       if (context?.previousUser) {
         queryClient.setQueryData(['currentUser'], context.previousUser);
       }
-      const msg = e?.body?.detail || e?.message || 'Failed to move funds';
-      setError(String(msg));
+      const msg = extractApiErrorMessage(e, 'Failed to move funds');
+      setError(msg);
     },
   });
 

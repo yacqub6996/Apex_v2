@@ -36,6 +36,7 @@ interface DepositAddressStepProps {
   onConfirm: () => void
   isConfirming: boolean
   isCommission?: boolean
+  onChangeNetwork?: () => void
 }
 
 export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
@@ -44,6 +45,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
   onConfirm,
   isConfirming,
   isCommission = false,
+  onChangeNetwork,
 }) => {
   const { formattedTime, isExpired, isCritical, isWarning } =
     useDepositTimer({
@@ -224,7 +226,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
             )}
 
             {/* Network and Asset Info */}
-            <Stack direction="row" spacing={2} sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider' }}>
+            <Stack direction="row" spacing={2} sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider', alignItems: 'center' }}>
               <Box flex={1}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                   Network
@@ -241,6 +243,16 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                   {session.asset}
                 </Typography>
               </Box>
+              {onChangeNetwork && !isExpired && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={onChangeNetwork}
+                  sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.25, px: 1 }}
+                >
+                  Change
+                </Button>
+              )}
             </Stack>
 
             {/* Amount Breakdown */}
@@ -274,8 +286,8 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.4 }}>
                 Send <strong>exactly {session.cryptoAmount} {session.asset}</strong> to the address within {formattedTime}.
                 {isCommission
-                  ? ' Once sent, tap "I Have Made Payment" below to submit your commission for blockchain confirmation.'
-                  : ' Once sent, tap "I Have Made Payment" below.'}
+                  ? ' Once sent, tap "I Have Made Payment" below to submit your commission for admin verification.'
+                  : ' Once sent, tap "I Have Made Payment" below to submit for admin verification.'}
               </Typography>
             </Alert>
           </Stack>
@@ -323,19 +335,23 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
 
       {/* Confirmation Dialog */}
       <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirm Payment Sent?</DialogTitle>
+        <DialogTitle>{isCommission ? 'Confirm Commission Payment Sent?' : 'Confirm Payment Sent?'}</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
             Please confirm that you have sent <strong>{session.cryptoAmount} {session.asset}</strong> (${(session.amountUsd + (session.vatFeeUsd || 5)).toFixed(2)} total) to the deposit address.
           </Typography>
-          {isCommission && (
+          {isCommission ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              Once confirmed, our team will verify your transaction on-chain and release your held copy trading equity to your Copy Trading Wallet.
+              Once confirmed, our admin team will verify your payment and release your held copy trading equity to your Copy Trading Wallet.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Once confirmed, our admin team will verify the payment and credit your account balance.
             </Typography>
           )}
           <Alert severity="warning" sx={{ mt: 2 }}>
             <Typography variant="caption">
-              Only click confirm if you've actually sent the payment. Our team will verify the transaction on the blockchain.
+              Only click confirm if you've actually sent the payment. Our admin team will verify the transaction before crediting.
             </Typography>
           </Alert>
         </DialogContent>

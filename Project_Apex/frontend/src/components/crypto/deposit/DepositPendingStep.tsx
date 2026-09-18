@@ -51,8 +51,8 @@ export const DepositPendingStep: React.FC<DepositPendingStepProps> = ({
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5, lineHeight: 1.5 }}>
           {isCommission
-            ? `Your commission payment${commissionAmount ? ` of ${formatUsdAmount(commissionAmount)}` : ''} has been submitted for blockchain verification${traderName ? ` (${traderName})` : ''}. Our admin team will verify the transaction on the blockchain (typically within 5-30 minutes).`
-            : 'Your payment confirmation has been submitted. Our team will verify your deposit on the blockchain and credit your account within 5-30 minutes.'}
+            ? `Your commission payment${commissionAmount ? ` of ${formatUsdAmount(commissionAmount)}` : ''} has been submitted for admin verification${traderName ? ` (${traderName})` : ''}. Our admin team will verify the payment (typically within 5-30 minutes).`
+            : 'Your payment confirmation has been submitted. Our admin team will verify your deposit and credit your account within 5-30 minutes.'}
         </Typography>
       </Alert>
 
