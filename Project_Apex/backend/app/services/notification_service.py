@@ -39,13 +39,23 @@ class NotificationService:
         action_url: Optional[str] = None,
     ) -> Notification:
         """Create a new notification for a user"""
+        parsed_entity_id = None
+        if related_entity_id is not None:
+            if isinstance(related_entity_id, uuid.UUID):
+                parsed_entity_id = related_entity_id
+            else:
+                try:
+                    parsed_entity_id = uuid.UUID(str(related_entity_id))
+                except Exception:
+                    parsed_entity_id = None
+
         notification = Notification(
             user_id=user_id,
             title=title,
             message=message,
             notification_type=notification_type,
             related_entity_type=related_entity_type,
-            related_entity_id=related_entity_id,
+            related_entity_id=parsed_entity_id,
             action_url=action_url,
             is_read=False,
             created_at=utc_now(),

@@ -25,6 +25,8 @@ interface DepositInputStepProps {
   onAmountChange: (amount: string) => void
   onAssetChange: (asset: Asset) => void
   onNetworkChange: (network: NetworkKey) => void
+  lockAmount?: boolean
+  isCommission?: boolean
 }
 
 const ASSETS: { value: Asset; label: string }[] = [
@@ -41,6 +43,8 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   onAmountChange,
   onAssetChange,
   onNetworkChange,
+  lockAmount = false,
+  isCommission = false,
 }) => {
   const { data: networks, isLoading: networksLoading } = useNetworks()
   const { data: rates } = useCryptoRates()
@@ -51,7 +55,8 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   const rate = rates?.[asset] || 0
   const cryptoAmount = rate > 0 ? (totalAmount / rate).toFixed(8).replace(/\.?0+$/, '') : '0'
 
-  const isValidAmount = usdAmount >= 50
+  const minAmount = isCommission ? 0.01 : 50
+  const isValidAmount = usdAmount >= minAmount
 
   // Filter networks by selected asset
   const availableNetworks = networks?.filter((n) => {
@@ -76,27 +81,40 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   return (
     <Stack spacing={3}>
       <Typography variant="body2" color="text.secondary">
-        Enter the amount you want to deposit in USD. A $5 VAT fee will be added.
+        {isCommission
+          ? 'This deposit pays trader commission. A $5 network fee will be added.'
+          : 'Enter the amount you want to deposit in USD. A $5 VAT fee will be added.'}
       </Typography>
 
       {/* Amount Input */}
       <Box>
         <TextField
-          label="Deposit Amount (USD)"
+          label={isCommission ? "Trader Commission (USD)" : "Deposit Amount (USD)"}
           value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
+          onChange={(e) => {
+            if (!lockAmount) {
+              onAmountChange(e.target.value)
+            }
+          }}
           type="number"
           fullWidth
-          placeholder="100.00"
+          disabled={lockAmount}
+          placeholder={isCommission ? "0.00" : "100.00"}
+          InputProps={{
+            readOnly: lockAmount,
+          }}
           inputProps={{
-            min: 50,
+            min: minAmount,
             step: 0.01,
+            readOnly: lockAmount,
           }}
           error={usdAmount > 0 && !isValidAmount}
           helperText={
-            usdAmount > 0 && !isValidAmount
-              ? 'Minimum deposit is $50.00'
-              : `Minimum: $50.00`
+            lockAmount
+              ? 'Trader commission amount is fixed based on your copy trading session profit.'
+              : usdAmount > 0 && !isValidAmount
+              ? `Minimum deposit is $${minAmount.toFixed(2)}`
+              : `Minimum: $${minAmount.toFixed(2)}`
           }
         />
       </Box>
@@ -143,7 +161,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
         <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
           <Stack spacing={1}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2">Amount:</Typography>
+              <Typography variant="body2">{isCommission ? 'Commission Amount:' : 'Amount:'}</Typography>
               <Typography variant="body2" fontWeight={500}>
                 ${usdAmount.toFixed(2)}
               </Typography>

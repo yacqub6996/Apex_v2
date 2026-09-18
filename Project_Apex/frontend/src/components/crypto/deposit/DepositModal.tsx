@@ -17,6 +17,7 @@ import {
   Box,
   useMediaQuery,
   useTheme,
+  Typography,
 } from '@mui/material'
 import { DepositInputStep } from './DepositInputStep'
 import { DepositAddressStep } from './DepositAddressStep'
@@ -29,11 +30,26 @@ import type { Asset, NetworkKey } from '@/types/crypto'
 interface DepositModalProps {
   open: boolean
   onClose: () => void
+  initialAmount?: number
+  lockAmount?: boolean
+  title?: string
+  subtitle?: string
+  metadataPayload?: Record<string, any> | null
+  description?: string | null
 }
 
 const steps = ['Enter Amount', 'Deposit Address', 'Confirmation']
 
-export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => {
+export const DepositModal: React.FC<DepositModalProps> = ({
+  open,
+  onClose,
+  initialAmount,
+  lockAmount = false,
+  title = 'Crypto Deposit',
+  subtitle,
+  metadataPayload,
+  description,
+}) => {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const { user } = useAuth()
@@ -65,9 +81,21 @@ export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => 
     },
   })
 
-  const [amount, setAmount] = useState<string>('100')
+  const [amount, setAmount] = useState<string>(initialAmount !== undefined ? initialAmount.toFixed(2) : '100')
   const [asset, setAsset] = useState<Asset>('USDT')
   const [network, setNetwork] = useState<NetworkKey>('TRON_TRC20')
+
+  useEffect(() => {
+    if (open) {
+      if (initialAmount !== undefined) {
+        setAmount(initialAmount.toFixed(2))
+      } else {
+        setAmount('100')
+      }
+    }
+  }, [open, initialAmount])
+
+  const isCommission = Boolean(lockAmount || (metadataPayload && metadataPayload.type === 'COPY_TRADING_COMMISSION'))
 
   // Show KYC warning when modal opens if user hasn't approved KYC
   useEffect(() => {
@@ -97,10 +125,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => 
 
   const handleGenerateClick = async () => {
     const usdAmount = parseFloat(amount)
-    if (isNaN(usdAmount) || usdAmount < 50) {
+    const minAmount = isCommission ? 0.01 : 50
+    if (isNaN(usdAmount) || usdAmount < minAmount) {
       return
     }
-    await handleGenerateAddress(asset, network, usdAmount)
+    await handleGenerateAddress(asset, network, usdAmount, metadataPayload, description)
   }
 
   const handleConfirmClick = async () => {
@@ -152,9 +181,14 @@ export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => 
         }}
       >
         <DialogTitle>
-          <Box sx={{ mb: 2 }}>
-            Crypto Deposit
+          <Box sx={{ mb: subtitle ? 0.5 : 2, fontWeight: 600, fontSize: '1.25rem' }}>
+            {title}
           </Box>
+          {subtitle && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {subtitle}
+            </Typography>
+          )}
           <Stepper activeStep={getStepIndex()} alternativeLabel>
             {steps.map((label) => (
               <Step key={label}>
@@ -186,6 +220,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => 
               onAmountChange={setAmount}
               onAssetChange={setAsset}
               onNetworkChange={setNetwork}
+              lockAmount={lockAmount}
+              isCommission={isCommission}
             />
           )}
 
@@ -212,7 +248,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ open, onClose }) => 
               <Button
                 onClick={handleGenerateClick}
                 variant="contained"
-                disabled={isGenerating || parseFloat(amount) < 50}
+                disabled={isGenerating || parseFloat(amount) < (isCommission ? 0.01 : 50)}
               >
                 {isGenerating ? 'Generating...' : 'Generate Address'}
               </Button>

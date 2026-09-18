@@ -502,6 +502,10 @@ class TransactionBase(SQLModel):
     status: TransactionStatus = TransactionStatus.PENDING
     description: str | None = Field(default=None, max_length=255)
     long_term_investment_id: uuid.UUID | None = None
+    metadata_payload: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column("metadata", JSON, nullable=True),
+    )
 
 
 class TransactionCreate(TransactionBase):

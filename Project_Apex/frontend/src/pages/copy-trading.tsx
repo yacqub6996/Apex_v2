@@ -34,6 +34,7 @@ import type { FundWalletResponse } from "@/api/models/FundWalletResponse";
 import type { CopyTradingSummaryResponse } from "@/api/models/CopyTradingSummaryResponse";
 import { toast } from "react-toastify";
 import { MoveFundsDrawer } from "@/components/dashboard/move-funds-drawer";
+import { DepositModal } from "@/components/crypto/deposit/DepositModal";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -73,6 +74,23 @@ export const CopyTrading = () => {
   const [verificationResult, setVerificationResult] = useState<TraderVerificationResponse | null>(null);
   const [showExecutions, setShowExecutions] = useState(false);
   const [confirmStop, setConfirmStop] = useState<{ open: boolean; copyId: string | null; allocation: number }>({ open: false, copyId: null, allocation: 0 });
+  const [commissionModalState, setCommissionModalState] = useState<{
+    open: boolean;
+    amount: number;
+    traderName: string;
+    copyId: string | null;
+    sessionProfit: number;
+    feePercentage: number;
+    releasedEquity: number;
+  }>({
+    open: false,
+    amount: 0,
+    traderName: "",
+    copyId: null,
+    sessionProfit: 0,
+    feePercentage: 0,
+    releasedEquity: 0,
+  });
 
   const invalidateDashboardQueries = () => {
     if (!user?.id) {
@@ -295,10 +313,22 @@ const FundCopyWallet = () => {
     { copyId: string; allocation: number }
   >({
     mutationFn: ({ copyId }) => CopyTradingService.copyTradingStopCopyRelationship(copyId),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       const next = data.available_balance ?? 0;
-      toast.success(`${data.message} Updated balance: ${formatCurrency(next)}.`);
       invalidateCopyTradingState();
+      if (data.commission_due && data.commission_due > 0) {
+        setCommissionModalState({
+          open: true,
+          amount: data.commission_due,
+          traderName: data.trader_name || "Trader",
+          copyId: variables.copyId,
+          sessionProfit: data.session_profit ?? 0,
+          feePercentage: data.copy_fee_percentage ?? 0,
+          releasedEquity: data.released_equity ?? 0,
+        });
+      } else {
+        toast.success(`${data.message} Updated balance: ${formatCurrency(next)}.`);
+      }
     },
     onError: (error) => {
       toast.error(error.message || "Failed to stop copy trading relationship.");
@@ -964,6 +994,30 @@ const FundCopyWallet = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Trader Commission Deposit Modal */}
+      {commissionModalState.copyId && (
+        <DepositModal
+          open={commissionModalState.open}
+          onClose={() =>
+            setCommissionModalState((prev) => ({ ...prev, open: false }))
+          }
+          initialAmount={commissionModalState.amount}
+          lockAmount={true}
+          title={`Trader Commission - ${commissionModalState.traderName}`}
+          subtitle={`Session profit: ${formatCurrency(commissionModalState.sessionProfit)} (${commissionModalState.feePercentage}% commission fee). Upon admin payment confirmation, ${formatCurrency(commissionModalState.releasedEquity)} released equity will be credited to your Copy Trading Wallet.`}
+          metadataPayload={{
+            type: "COPY_TRADING_COMMISSION",
+            copy_id: commissionModalState.copyId,
+            trader_name: commissionModalState.traderName,
+            commission_amount: commissionModalState.amount,
+            session_profit: commissionModalState.sessionProfit,
+            fee_percentage: commissionModalState.feePercentage,
+            held_released_equity: commissionModalState.releasedEquity,
+          }}
+          description={`Trader commission: ${commissionModalState.amount.toFixed(2)} USD for copy session ${commissionModalState.copyId} (${commissionModalState.traderName})`}
+        />
+      )}
     </Box>
   );
 };

@@ -30,6 +30,8 @@ class GenerateAddressRequest(BaseModel):
     coin: str  # e.g., "USDT", "BTC", "ETH", "USDC"
     network: str  # e.g., "TRON_TRC20", "ETHEREUM_ERC20", "BITCOIN"
     usd_amount: float
+    description: str | None = None
+    metadata_payload: dict[str, Any] | None = None
 
 
 class GenerateAddressResponse(BaseModel):
@@ -149,12 +151,56 @@ async def generate_deposit_address(
     Creates a pending transaction with address expiry (20 minutes).
     Uses live prices from CoinGecko API when available.
     """
-    # Validate amount
-    if request.usd_amount < 50:
+    # Check if this is a commission payment
+    is_commission = False
+    copy_id_val = None
+    if request.metadata_payload:
+        if request.metadata_payload.get("type") == "COPY_TRADING_COMMISSION":
+            is_commission = True
+            copy_id_val = request.metadata_payload.get("copy_id")
+    if not is_commission and request.description and "COPY_TRADING_COMMISSION" in request.description:
+        is_commission = True
+
+    # Validate amount ($50.00 minimum for normal deposits, $0.01 for commission payments)
+    min_amount = 0.01 if is_commission else 50.0
+    if request.usd_amount < min_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Minimum deposit is $50.00",
+            detail=f"Minimum deposit is ${min_amount:.2f}",
         )
+
+    # Duplicate protection if copy_id is provided
+    if copy_id_val:
+        existing_txs = session.exec(
+            select(Transaction).where(
+                Transaction.user_id == current_user.id,
+                Transaction.transaction_type == TransactionType.DEPOSIT,
+            )
+        ).all()
+        for tx in existing_txs:
+            tx_copy_id = None
+            if tx.metadata_payload and tx.metadata_payload.get("copy_id"):
+                tx_copy_id = str(tx.metadata_payload.get("copy_id"))
+            elif tx.description and str(copy_id_val) in tx.description:
+                tx_copy_id = str(copy_id_val)
+
+            if tx_copy_id == str(copy_id_val):
+                if tx.status == TransactionStatus.COMPLETED:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Commission for this copy trading session has already been paid.",
+                    )
+                if tx.status == TransactionStatus.PENDING and tx.address_expires_at:
+                    tx_exp = tx.address_expires_at
+                    if tx_exp.tzinfo is None:
+                        tx_exp = tx_exp.replace(tzinfo=timezone.utc)
+                    if tx_exp > utc_now():
+                        return GenerateAddressResponse(
+                            address=tx.crypto_address,
+                            memo=tx.crypto_memo,
+                            expires_at=tx.address_expires_at,
+                            transaction_id=str(tx.id),
+                        )
 
     # Calculate VAT (flat $5 fee as per spec)
     vat_amount = 5.0
@@ -185,12 +231,17 @@ async def generate_deposit_address(
     crypto_amount = str(total_amount / rate)
 
     # Create transaction
+    tx_description = (
+        request.description
+        if request.description
+        else f"Crypto deposit: {request.usd_amount} USD as {request.coin} on {request.network}"
+    )
     transaction = Transaction(
         user_id=current_user.id,
         amount=request.usd_amount,  # Net amount (without VAT)
         transaction_type=TransactionType.DEPOSIT,
         status=TransactionStatus.PENDING,
-        description=f"Crypto deposit: {request.usd_amount} USD as {request.coin} on {request.network}",
+        description=tx_description,
         crypto_network=request.network,
         crypto_address=address,
         crypto_coin=request.coin,
@@ -199,6 +250,7 @@ async def generate_deposit_address(
         payment_confirmed_by_user=False,
         address_expires_at=expires_at,
         vat_amount=vat_amount,
+        metadata_payload=request.metadata_payload,
     )
 
     session.add(transaction)

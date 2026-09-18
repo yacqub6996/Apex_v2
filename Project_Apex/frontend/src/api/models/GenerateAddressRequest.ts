@@ -6,4 +6,6 @@ export type GenerateAddressRequest = {
     coin: string;
     network: string;
     usd_amount: number;
+    description?: string | null;
+    metadata_payload?: Record<string, any> | null;
 };

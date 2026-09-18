@@ -355,6 +355,11 @@ class CopyTradingUpdateResponse(SQLModel):
     message: str
     available_balance: float
     copied_trader: CopiedTraderSummary
+    commission_due: float = 0.0
+    session_profit: float = 0.0
+    copy_fee_percentage: float = 0.0
+    trader_name: str | None = None
+    released_equity: float = 0.0
 
 
 class CopyTradingWithdrawalRequest(SQLModel):
@@ -948,11 +953,19 @@ def stop_copy_relationship(
 
     if previous_status == CopyStatus.STOPPED:
         copied_summary = _build_copied_trader(copy)
+        held_equity = 0.0
+        if copy.copy_settings:
+            held_equity = float(copy.copy_settings.get("held_released_equity", 0.0) or 0.0)
         return CopyTradingUpdateResponse(
             success=True,
             message="Copy relationship already stopped",
             available_balance=float(copy.user.copy_trading_wallet.balance) if getattr(copy.user, "copy_trading_wallet", None) else 0.0,
             copied_trader=copied_summary,
+            commission_due=0.0,
+            session_profit=0.0,
+            copy_fee_percentage=float(copy.trader_profile.copy_fee_percentage or 0.0) if copy.trader_profile else 0.0,
+            trader_name=copy.trader_profile.display_name if copy.trader_profile else None,
+            released_equity=held_equity,
         )
 
     # Ensure user and copy_trading_wallet are loaded
@@ -966,6 +979,40 @@ def stop_copy_relationship(
         copy.user.copy_trading_wallet = CopyTradingWallet(user_id=copy.user.id, balance=0.0)
         session.add(copy.user.copy_trading_wallet)
         session.flush()
+
+    # Calculate session profit and trader commission due
+    profit_stmt = (
+        select(func.coalesce(func.sum(ExecutionEvent.amount), 0.0))
+        .where(ExecutionEvent.user_id == copy.user.id)
+        .where(ExecutionEvent.trader_profile_id == copy.trader_profile_id)
+        .where(ExecutionEvent.event_type == ExecutionEventType.FOLLOWER_PROFIT)
+        .where(ExecutionEvent.created_at >= copy.copy_started_at)
+    )
+    session_profit = round(float(session.exec(profit_stmt).one() or 0.0), 2)
+    copy_fee_pct = float(copy.trader_profile.copy_fee_percentage or 0.0) if copy.trader_profile else 0.0
+
+    if session_profit > 0 and copy_fee_pct > 0:
+        commission_due = round(session_profit * (copy_fee_pct / 100.0), 2)
+    else:
+        commission_due = 0.0
+
+    # Duplicate protection check: if a commission deposit transaction already exists for this copy session
+    if commission_due > 0:
+        existing_txs = session.exec(
+            select(Transaction).where(
+                Transaction.user_id == copy.user.id,
+                Transaction.transaction_type == TransactionType.DEPOSIT,
+            )
+        ).all()
+        for tx in existing_txs:
+            if tx.metadata_payload and str(tx.metadata_payload.get("copy_id")) == str(copy.id):
+                if tx.status in (TransactionStatus.COMPLETED, TransactionStatus.PENDING):
+                    commission_due = 0.0
+                    break
+            elif tx.description and str(copy.id) in tx.description and "commission" in tx.description.lower():
+                if tx.status in (TransactionStatus.COMPLETED, TransactionStatus.PENDING):
+                    commission_due = 0.0
+                    break
 
     # Compute proportionate equity to release for this copy
     from sqlmodel import select as _select
@@ -985,16 +1032,33 @@ def stop_copy_relationship(
     else:
         release_amount = round(float(copy.copy_amount or 0.0), 2)
 
-    # Update balances: allocated equity -> Copy Trading Wallet
-    copy.user.copy_trading_balance = round(total_equity - release_amount, 2)
-    wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
-    copy.user.copy_trading_wallet.balance = round(wallet_balance + release_amount, 2)
+    # Liquidate allocated equity from active copy trading balance
+    copy.user.copy_trading_balance = max(0.0, round(total_equity - release_amount, 2))
 
+    settings = dict(copy.copy_settings or {})
+    settings["session_profit"] = session_profit
+    settings["copy_fee_percentage"] = copy_fee_pct
+
+    # Hold or release equity:
+    # If commission is due, equity is held until admin confirms separate commission payment.
+    # If no commission is due, equity is credited immediately to Copy Trading Wallet.
+    if commission_due > 0:
+        settings["held_released_equity"] = release_amount
+        settings["commission_due"] = commission_due
+        settings["equity_released"] = False
+    else:
+        wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
+        copy.user.copy_trading_wallet.balance = round(wallet_balance + release_amount, 2)
+        settings["held_released_equity"] = 0.0
+        settings["commission_due"] = 0.0
+        settings["equity_released"] = True
+        session.add(copy.user.copy_trading_wallet)
+
+    copy.copy_settings = settings
     copy.copy_status = CopyStatus.STOPPED
     _apply_status_transition(copy, CopyStatus.STOPPED, previous_status=previous_status)
 
     session.add(copy.user)
-
     session.add(copy)
     if copy.trader_profile:
         session.add(copy.trader_profile)
@@ -1005,9 +1069,19 @@ def stop_copy_relationship(
         session.refresh(copy.trader_profile, attribute_names=["user"])
 
     copied_summary = _build_copied_trader(copy)
-    # Return updated Copy Trading Wallet balance as available_balance for client cache update
+    # Return current Copy Trading Wallet balance as available_balance for client cache update
     session.refresh(copy.user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     available_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
+
+    trader_name = (
+        copy.trader_profile.display_name
+        if copy.trader_profile and copy.trader_profile.display_name
+        else (
+            copy.trader_profile.user.full_name
+            if copy.trader_profile and copy.trader_profile.user and copy.trader_profile.user.full_name
+            else "Trader"
+        )
+    )
 
     # Notify stop event
     try:
@@ -1027,6 +1101,11 @@ def stop_copy_relationship(
         message="Copy relationship stopped",
         available_balance=available_balance,
         copied_trader=copied_summary,
+        commission_due=commission_due,
+        session_profit=session_profit,
+        copy_fee_percentage=copy_fee_pct,
+        trader_name=trader_name,
+        released_equity=release_amount,
     )
 
 

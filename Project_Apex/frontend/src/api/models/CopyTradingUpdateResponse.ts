@@ -9,4 +9,9 @@ export type CopyTradingUpdateResponse = {
     message: string;
     available_balance: number;
     copied_trader: CopiedTraderSummary;
+    commission_due?: number;
+    session_profit?: number;
+    copy_fee_percentage?: number;
+    trader_name?: string | null;
+    released_equity?: number;
 };

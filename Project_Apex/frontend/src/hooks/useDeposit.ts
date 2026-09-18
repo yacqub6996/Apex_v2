@@ -168,12 +168,20 @@ export function useDepositFlow(options: UseDepositFlowOptions = {}) {
   const { data: rates } = useCryptoRates()
 
   const handleGenerateAddress = useCallback(
-    async (coin: string, network: string, usdAmount: number) => {
+    async (
+      coin: string,
+      network: string,
+      usdAmount: number,
+      metadataPayload?: Record<string, any> | null,
+      description?: string | null
+    ) => {
       try {
         const response = await generateMutation.mutateAsync({
           coin,
           network,
           usd_amount: usdAmount,
+          metadata_payload: metadataPayload,
+          description: description,
         })
 
         // Calculate time remaining from expires_at
