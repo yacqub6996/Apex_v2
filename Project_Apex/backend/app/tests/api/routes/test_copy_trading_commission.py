@@ -23,6 +23,7 @@ from app.api.routes.copy_trading import stop_copy_relationship
 from app.api.routes.crypto_deposits import (
     generate_deposit_address,
     GenerateAddressRequest,
+    DEMO_ADDRESSES,
 )
 from app.services.transactions import finalize_deposit_transaction
 
@@ -175,8 +176,11 @@ async def test_copy_trading_commission_stop_holds_equity_and_admin_release(db_se
         current_user=user,
         request=req,
     )
+    assert gen_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert gen_res.address == "TQ2DeM0Addr3ss111111111111111111111111"
     tx = db_session.get(Transaction, uuid.UUID(gen_res.transaction_id))
     assert tx is not None
+    assert tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
     assert tx.status == TransactionStatus.PENDING
 
     # 8. Admin confirms the commission deposit
@@ -374,8 +378,11 @@ async def test_ordinary_deposit_still_credits_main_wallet(db_session: Session):
         usd_amount=100.0,
     )
     res = await generate_deposit_address(session=db_session, current_user=user, request=req)
+    assert res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert res.address == "TQ2DeM0Addr3ss111111111111111111111111"
     tx = db_session.get(Transaction, uuid.UUID(res.transaction_id))
     assert tx is not None
+    assert tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
 
     finalize_deposit_transaction(session=db_session, transaction=tx, notify=False)
     db_session.refresh(user)
@@ -384,6 +391,118 @@ async def test_ordinary_deposit_still_credits_main_wallet(db_session: Session):
     assert user.wallet_balance == 300.0
     assert user.balance == 300.0
     assert copy_wallet.balance == 50.0  # Copy wallet untouched
+
+
+@pytest.mark.anyio
+async def test_commission_and_ordinary_deposits_share_identical_address_resolution(db_session: Session):
+    """Verify that ordinary deposits and COPY_TRADING_COMMISSION deposits resolve to the
+    exact same hardcoded DEMO_ADDRESSES, without generating, deriving, or modifying addresses,
+    while strictly preserving commission-specific business rules ($0.01 min vs $50.00 min,
+    duplicate commission protection, held equity settlement).
+    """
+    user = User(
+        id=uuid.uuid4(),
+        email="shared_addr_user@example.com",
+        hashed_password="hash",
+        wallet_balance=100.0,
+        balance=100.0,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    # 1. Test USDT / TRON_TRC20 specifically
+    ordinary_req = GenerateAddressRequest(
+        coin="USDT",
+        network="TRON_TRC20",
+        usd_amount=100.0,
+    )
+    ordinary_res = await generate_deposit_address(
+        session=db_session,
+        current_user=user,
+        request=ordinary_req,
+    )
+
+    dummy_copy_id = uuid.uuid4()
+    commission_req = GenerateAddressRequest(
+        coin="USDT",
+        network="TRON_TRC20",
+        usd_amount=25.0,  # Below ordinary minimum ($50), allowed for commission
+        metadata_payload={
+            "type": "COPY_TRADING_COMMISSION",
+            "copy_id": str(dummy_copy_id),
+            "trader_name": "Test Trader",
+            "commission_amount": 25.0,
+        },
+        description=f"Trader commission: 25.00 USD for copy session {dummy_copy_id}",
+    )
+    commission_res = await generate_deposit_address(
+        session=db_session,
+        current_user=user,
+        request=commission_req,
+    )
+
+    # Assert exact identity of resolved address:
+    assert ordinary_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert commission_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert ordinary_res.address == commission_res.address
+    assert ordinary_res.address == "TQ2DeM0Addr3ss111111111111111111111111"
+
+    # Verify underlying transaction record has the exact same receiving address
+    ord_tx = db_session.get(Transaction, uuid.UUID(ordinary_res.transaction_id))
+    comm_tx = db_session.get(Transaction, uuid.UUID(commission_res.transaction_id))
+    assert ord_tx is not None and comm_tx is not None
+    assert ord_tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert comm_tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert ord_tx.crypto_address == comm_tx.crypto_address
+
+    # 2. Test all other supported coin/network pairs to ensure full deterministic parity
+    test_pairs = [
+        ("BTC", "BITCOIN", 100.0, 10.0),
+        ("ETH", "ETHEREUM_ERC20", 100.0, 15.0),
+        ("USDT", "ETHEREUM_ERC20", 100.0, 20.0),
+        ("USDT", "POLYGON", 100.0, 5.0),
+        ("USDC", "POLYGON", 100.0, 8.0),
+        ("USDC", "ETHEREUM_ERC20", 100.0, 12.0),
+    ]
+
+    for coin, net, ord_amt, comm_amt in test_pairs:
+        key = f"{coin}_{net}"
+        expected_addr = DEMO_ADDRESSES[key]
+
+        ord_r = await generate_deposit_address(
+            session=db_session,
+            current_user=user,
+            request=GenerateAddressRequest(coin=coin, network=net, usd_amount=ord_amt),
+        )
+        c_id = uuid.uuid4()
+        comm_r = await generate_deposit_address(
+            session=db_session,
+            current_user=user,
+            request=GenerateAddressRequest(
+                coin=coin,
+                network=net,
+                usd_amount=comm_amt,
+                metadata_payload={"type": "COPY_TRADING_COMMISSION", "copy_id": str(c_id)},
+            ),
+        )
+
+        assert ord_r.address == expected_addr, f"Ordinary {key} resolved to {ord_r.address}, expected {expected_addr}"
+        assert comm_r.address == expected_addr, f"Commission {key} resolved to {comm_r.address}, expected {expected_addr}"
+        assert ord_r.address == comm_r.address, f"Mismatch between ordinary and commission address for {key}"
+
+    # 3. Confirm that business rules still differentiate them:
+    # Ordinary deposit below $50 must fail
+    with pytest.raises(HTTPException) as exc_info:
+        await generate_deposit_address(
+            session=db_session,
+            current_user=user,
+            request=GenerateAddressRequest(coin="USDT", network="TRON_TRC20", usd_amount=25.0),
+        )
+    assert exc_info.value.status_code == 400
+    assert "Minimum deposit is $50.00" in exc_info.value.detail
+
+    # Commission deposit below $50 (e.g. $25.00) succeeded (commission_res above)
+    assert commission_res.transaction_id is not None
 
 
 if __name__ == "__main__":
@@ -413,6 +532,11 @@ if __name__ == "__main__":
     with Session(engine) as s:
         print("Running test_ordinary_deposit_still_credits_main_wallet...")
         asyncio.run(test_ordinary_deposit_still_credits_main_wallet(s))
+        print("✓ Passed!")
+
+    with Session(engine) as s:
+        print("Running test_commission_and_ordinary_deposits_share_identical_address_resolution...")
+        asyncio.run(test_commission_and_ordinary_deposits_share_identical_address_resolution(s))
         print("✓ Passed!")
 
     print("\nAll Copy Trading commission accounting and settlement tests passed successfully!")

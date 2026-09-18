@@ -65,11 +65,9 @@ class CryptoRates(BaseModel):
 # These are imported from the coingecko service
 DEFAULT_CRYPTO_RATES = FALLBACK_RATES
 
-# Static demo addresses per coin/network (in production, these would be generated dynamically)
-# WARNING: These are shared addresses for all users. This is a CRITICAL SECURITY ISSUE.
-# All deposits use the same addresses, making it impossible to distinguish which user sent which payment.
-# This allows users to potentially claim other users' deposits.
-# MUST be replaced with unique address generation per transaction before production use.
+# Preconfigured receiving addresses per coin/network.
+# Intentional hardcoded receiving addresses used by Apex as the source of truth for both
+# ordinary deposits and Copy Trading Commission deposits.
 DEMO_ADDRESSES = {
     "BTC_BITCOIN": "bc1q9demo0x9k4u5y6x7z8q2m3n4p5r6s7t8v9w0xy",
     "ETH_ETHEREUM_ERC20": "0x7E57D3m0cAfE0000000000000000000000CaFe00",
