@@ -65,14 +65,12 @@ jobs:
 
       # --- CRITICAL FIX 1: Inject the Production API URL before build ---
       - name: Configure and Build Frontend
-        working-directory: ./Project_Apex/frontend
+        working-directory: ./Project_Apex
         run: |
-          # 1. Configure the API URL to point to the secure Reverse Proxy path.
-          # The browser will call this URL, and CyberPanel will forward it to Docker:8000.
-          echo "VITE_API_BASE_URL=https://apex-portfolios.org/api/v1" > .env.production
-          
-          # 2. Run the build (uses the VITE variable)
-          npm run build
+          # Vite's envDir is Project_Apex, so write the production env file here.
+          echo "VITE_API_URL=https://apex-portfolios.org" > .env.production
+
+          npm --prefix frontend run build
 
       # --- Upload built frontend to the correct docroot on the VPS ---
       - name: Clear existing frontend on VPS
@@ -99,6 +97,25 @@ jobs:
           password: ${{ secrets.HOST_PASSWORD }}
           source: "Project_Apex/frontend/dist/*"
           target: "/home/apex-portfolios.org/public_html"
+          strip_components: 3
+
+      - name: Remove confirmed stale nested frontend deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: root
+          password: ${{ secrets.HOST_PASSWORD }}
+          script: |
+            DEPLOY_DIR="/home/apex-portfolios.org/public_html"
+            STALE_DIR="${DEPLOY_DIR}/Project_Apex"
+            # The old SCP layout nests the built app at Project_Apex/frontend/dist.
+            # Only remove that exact confirmed stale deployment tree.
+            if [ -f "${STALE_DIR}/frontend/dist/index.html" ] && \
+               [ -d "${STALE_DIR}/frontend/dist/assets" ]; then
+              rm -rf -- "${STALE_DIR}"
+            else
+              echo "No confirmed stale nested frontend deployment found; leaving ${STALE_DIR} untouched."
+            fi
 
       - name: Fix permissions and ensure .htaccess on CyberPanel
         uses: appleboy/ssh-action@v1.0.3
