@@ -88,26 +88,30 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
   }
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={{ xs: 2, sm: 2.5 }}>
       {/* Timer Display */}
       <Paper
         elevation={0}
         sx={{
-          p: 2,
+          p: { xs: 1.25, sm: 2 },
           textAlign: 'center',
           bgcolor: getTimerBgColor(),
           border: `2px solid ${getTimerColor()}`,
+          borderRadius: 2,
         }}
       >
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
           {isExpired ? 'Address Expired' : 'Time Remaining'}
         </Typography>
         <Typography
-          variant="h3"
+          variant="h4"
           sx={{
             color: getTimerColor(),
-            fontWeight: 600,
+            fontWeight: 700,
+            fontSize: { xs: '1.75rem', sm: '2.5rem' },
             fontFamily: 'monospace',
+            lineHeight: 1.1,
+            my: 0.25,
             animation: isCritical ? 'pulse 1s infinite' : 'none',
             '@keyframes pulse': {
               '0%, 100%': { opacity: 1 },
@@ -118,9 +122,9 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
           {formattedTime}
         </Typography>
         {(isWarning || isCritical) && !isExpired && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
-            <WarningIcon fontSize="small" sx={{ mr: 0.5, color: getTimerColor() }} />
-            <Typography variant="caption" sx={{ color: getTimerColor(), fontWeight: 500 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 0.5 }}>
+            <WarningIcon fontSize="small" sx={{ mr: 0.5, color: getTimerColor(), fontSize: { xs: 14, sm: 18 } }} />
+            <Typography variant="caption" sx={{ color: getTimerColor(), fontWeight: 600, fontSize: { xs: '0.72rem', sm: '0.75rem' } }}>
               {isCritical ? 'Expiring very soon!' : 'Expiring soon'}
             </Typography>
           </Box>
@@ -129,24 +133,24 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
 
       {/* Warning/Error Alerts */}
       {isExpired && (
-        <Alert severity="error">
+        <Alert severity="error" sx={{ p: { xs: 1, sm: 1.5 } }}>
           This deposit address has expired. Please generate a new address to continue.
         </Alert>
       )}
 
       {isWarning && !isExpired && (
-        <Alert severity="warning">
+        <Alert severity="warning" sx={{ p: { xs: 1, sm: 1.5 } }}>
           Your deposit address will expire soon. Please complete your payment promptly.
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {/* Left: Address Details */}
+      <Grid container spacing={{ xs: 2, md: 3 }} alignItems="stretch">
+        {/* Address Details */}
         <Grid size={{ xs: 12, md: 7 }}>
-          <Stack spacing={2}>
+          <Stack spacing={{ xs: 1.5, sm: 2 }}>
             {/* Deposit Address */}
             <Box>
-              <Typography variant="caption" color="text.secondary" gutterBottom>
+              <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 500 }}>
                 Deposit Address
               </Typography>
               <TextField
@@ -155,7 +159,15 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                 size="small"
                 InputProps={{
                   readOnly: true,
-                  sx: { fontFamily: 'monospace', fontSize: '0.875rem' },
+                  sx: {
+                    fontFamily: 'monospace',
+                    fontSize: { xs: '0.72rem', sm: '0.85rem' },
+                    letterSpacing: { xs: '-0.03em', sm: 'normal' },
+                    '& input': {
+                      p: { xs: 1, sm: 1.25 },
+                      textOverflow: 'ellipsis',
+                    },
+                  },
                   endAdornment: (
                     <InputAdornment position="end">
                       <Tooltip title={copied ? 'Copied!' : 'Copy address'}>
@@ -164,6 +176,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                           disabled={isExpired}
                           size="small"
                           color={copied ? 'success' : 'default'}
+                          sx={{ p: { xs: 0.75, sm: 1 } }}
                         >
                           {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
                         </IconButton>
@@ -177,7 +190,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
             {/* Memo field if required */}
             {session.memo && (
               <Box>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
+                <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 500 }}>
                   Memo <Chip label="REQUIRED" size="small" color="error" sx={{ ml: 1, height: 20 }} />
                 </Typography>
                 <TextField
@@ -186,11 +199,15 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                   size="small"
                   InputProps={{
                     readOnly: true,
-                    sx: { fontFamily: 'monospace' },
+                    sx: {
+                      fontFamily: 'monospace',
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      '& input': { p: { xs: 1, sm: 1.25 } },
+                    },
                     endAdornment: (
                       <InputAdornment position="end">
                         <Tooltip title="Copy memo">
-                          <IconButton onClick={handleCopyMemo} disabled={isExpired} size="small">
+                          <IconButton onClick={handleCopyMemo} disabled={isExpired} size="small" sx={{ p: { xs: 0.75, sm: 1 } }}>
                             <ContentCopyIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -198,7 +215,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                     ),
                   }}
                 />
-                <Alert severity="warning" sx={{ mt: 1 }}>
+                <Alert severity="warning" sx={{ mt: 1, p: { xs: 0.75, sm: 1 } }}>
                   <Typography variant="caption">
                     <strong>Important:</strong> You must include this memo when sending your payment, or your funds may be lost.
                   </Typography>
@@ -207,93 +224,102 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
             )}
 
             {/* Network and Asset Info */}
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider' }}>
               <Box flex={1}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                   Network
                 </Typography>
-                <Typography variant="body2" fontWeight={500}>
+                <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                   {session.network}
                 </Typography>
               </Box>
               <Box flex={1}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                   Asset
                 </Typography>
-                <Typography variant="body2" fontWeight={500}>
+                <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                   {session.asset}
                 </Typography>
               </Box>
             </Stack>
 
-            {/* Commission Amount Breakdown */}
-            {isCommission && (
-              <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
-                  Amount Breakdown
+            {/* Amount Breakdown */}
+            <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1.5, border: 1, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+                Amount Breakdown
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {isCommission ? 'Trader Performance Commission:' : 'Deposit Amount:'}
                 </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                  <Typography variant="caption" color="text.secondary">Trader Commission:</Typography>
-                  <Typography variant="caption" fontWeight={600}>${session.amountUsd.toFixed(2)}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                  <Typography variant="caption" color="text.secondary">Blockchain Network Fee:</Typography>
-                  <Typography variant="caption" fontWeight={600}>+${(session.vatFeeUsd || 5).toFixed(2)}</Typography>
-                </Box>
-                <Divider sx={{ my: 0.5 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="caption" fontWeight={700}>Total to Send:</Typography>
-                  <Typography variant="caption" fontWeight={700} color="primary.main">
-                    ${(session.amountUsd + (session.vatFeeUsd || 5)).toFixed(2)} ({session.cryptoAmount} {session.asset})
-                  </Typography>
-                </Box>
+                <Typography variant="caption" fontWeight={600}>${session.amountUsd.toFixed(2)}</Typography>
               </Box>
-            )}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {isCommission ? 'Blockchain Network Fee:' : 'VAT Fee:'}
+                </Typography>
+                <Typography variant="caption" fontWeight={600}>+${(session.vatFeeUsd || 5).toFixed(2)}</Typography>
+              </Box>
+              <Divider sx={{ my: 0.5 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="caption" fontWeight={700}>Total Due to Send:</Typography>
+                <Typography variant="caption" fontWeight={700} color="primary.main">
+                  ${(session.amountUsd + (session.vatFeeUsd || 5)).toFixed(2)} ({session.cryptoAmount} {session.asset})
+                </Typography>
+              </Box>
+            </Box>
 
             {/* Instructions */}
-            <Alert severity="info" sx={{ p: { xs: 1, sm: 1.5 } }}>
-              <Typography variant="body2">
-                Send <strong>exactly {session.cryptoAmount} {session.asset}</strong> to the address above within {formattedTime}.
+            <Alert severity="info" sx={{ p: { xs: 1, sm: 1.25 } }}>
+              <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.4 }}>
+                Send <strong>exactly {session.cryptoAmount} {session.asset}</strong> to the address within {formattedTime}.
                 {isCommission
-                  ? ' After sending, click "I Have Made Payment" below to submit your commission for blockchain verification.'
-                  : ' After sending, click "I Have Made Payment" below.'}
+                  ? ' Once sent, tap "I Have Made Payment" below to submit your commission for blockchain confirmation.'
+                  : ' Once sent, tap "I Have Made Payment" below.'}
               </Typography>
             </Alert>
-
-            {/* Confirm Payment Button */}
-            {!isExpired && (
-              <Button
-                variant="contained"
-                onClick={handleConfirmClick}
-                disabled={isConfirming}
-                fullWidth
-                size="large"
-              >
-                {isConfirming ? 'Confirming...' : 'I Have Made Payment'}
-              </Button>
-            )}
           </Stack>
         </Grid>
 
-        {/* Right: QR Code */}
+        {/* QR Code */}
         <Grid size={{ xs: 12, md: 5 }}>
-          <Box
+          <Paper
+            variant="outlined"
             sx={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              p: { xs: 1, sm: 2 },
+              minHeight: { xs: 180, md: 220 },
+              p: { xs: 1.5, sm: 2 },
+              borderRadius: 2,
+              bgcolor: 'background.default',
             }}
           >
             <QRCode value={session.walletAddress} size="lg" />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-              Scan to copy address
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center', fontSize: '0.72rem' }}>
+              Scan with your wallet app to copy address
             </Typography>
-          </Box>
+          </Paper>
         </Grid>
       </Grid>
+
+      {/* Primary Confirmation Action (always positioned after QR and address info) */}
+      {!isExpired && (
+        <Box sx={{ pt: { xs: 0.5, sm: 1 } }}>
+          <Button
+            variant="contained"
+            onClick={handleConfirmClick}
+            disabled={isConfirming}
+            fullWidth
+            size="large"
+            sx={{ py: { xs: 1.25, sm: 1.5 }, fontWeight: 700 }}
+          >
+            {isConfirming ? 'Confirming...' : 'I Have Made Payment'}
+          </Button>
+        </Box>
+      )}
 
       {/* Confirmation Dialog */}
       <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="xs" fullWidth>

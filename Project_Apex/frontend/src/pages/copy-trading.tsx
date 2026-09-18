@@ -459,8 +459,9 @@ const FundCopyWallet = () => {
             sx={{
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
-              gap: { xs: 2, sm: 3 },
-              alignItems: { sm: 'center' },
+              gap: { xs: 1.5, sm: 3 },
+              alignItems: { xs: 'stretch', sm: 'center' },
+              width: { xs: '100%', lg: 'auto' },
             }}
           >
             <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
@@ -508,6 +509,7 @@ const FundCopyWallet = () => {
               variant="contained"
               size="small"
               onClick={() => setMoveFundsOpen(true)}
+              sx={{ width: { xs: '100%', sm: 'auto' }, py: { xs: 0.85, sm: 0.75 } }}
             >
               Transfer Funds
             </Button>
@@ -519,13 +521,26 @@ const FundCopyWallet = () => {
       {totalHeldEquity > 0 && (
         <Alert
           severity="warning"
-          icon={<LockIcon fontSize="inherit" />}
+          icon={<LockIcon fontSize="inherit" sx={{ mt: { xs: 0.5, sm: 0 } }} />}
           sx={{
             borderRadius: 2,
             border: 1,
             borderColor: 'warning.light',
-            alignItems: { xs: 'flex-start', sm: 'center' },
-            '& .MuiAlert-message': { width: '100%' },
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
+            '& .MuiAlert-message': {
+              width: '100%',
+              p: 0,
+            },
+            '& .MuiAlert-action': {
+              m: 0,
+              p: 0,
+              pt: { xs: 1.5, sm: 0 },
+              pl: { sm: 2 },
+              width: { xs: '100%', sm: 'auto' },
+              alignSelf: { xs: 'stretch', sm: 'center' },
+            },
           }}
           action={
             stoppedWithHeldEquity.length > 0 ? (
@@ -535,9 +550,10 @@ const FundCopyWallet = () => {
                 size="small"
                 onClick={() => handleOpenCommissionModal(stoppedWithHeldEquity[0])}
                 sx={{
-                  mt: { xs: 1, sm: 0 },
+                  width: { xs: '100%', sm: 'auto' },
                   whiteSpace: 'nowrap',
                   fontWeight: 600,
+                  py: { xs: 0.75, sm: 0.5 },
                 }}
               >
                 Pay Commission ({formatCurrency(stoppedWithHeldEquity[0].commission_due || totalCommissionDue)})
@@ -549,7 +565,7 @@ const FundCopyWallet = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               {formatCurrency(totalHeldEquity)} Liquidated Equity Held in Escrow
             </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5 }}>
+            <Typography variant="body2" sx={{ mt: 0.5, fontSize: { xs: '0.825rem', sm: '0.875rem' }, lineHeight: 1.45 }}>
               Your stopped copy trading session has realized profit. Your funds ({formatCurrency(totalHeldEquity)}) are safely held in escrow pending verification of the trader's performance commission ({formatCurrency(totalCommissionDue)}). Once verified by our team, your funds will be unlocked and credited directly to your Copy Trading Wallet.
             </Typography>
           </Box>
@@ -680,15 +696,15 @@ const FundCopyWallet = () => {
                         <Box
                           sx={{
                             display: 'grid',
-                            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
-                            gap: 2,
-                            p: 1.5,
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+                            gap: { xs: 1.25, sm: 2 },
+                            p: { xs: 1.25, sm: 1.5 },
                             borderRadius: 1.5,
                             bgcolor: 'background.paper',
                             mb: 2,
                           }}
                         >
-                          <Box>
+                          <Box sx={{ display: { xs: 'flex', sm: 'block' }, justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="caption" color="text.secondary">
                               Held Released Equity
                             </Typography>
@@ -696,7 +712,7 @@ const FundCopyWallet = () => {
                               {formatCurrency(heldEquity)}
                             </Typography>
                           </Box>
-                          <Box>
+                          <Box sx={{ display: { xs: 'flex', sm: 'block' }, justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="caption" color="text.secondary">
                               Session Profit
                             </Typography>
@@ -710,7 +726,7 @@ const FundCopyWallet = () => {
                               {formatCurrency(sessionProfit)}
                             </Typography>
                           </Box>
-                          <Box>
+                          <Box sx={{ display: { xs: 'flex', sm: 'block' }, justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="caption" color="text.secondary">
                               Commission Due
                             </Typography>
@@ -729,12 +745,12 @@ const FundCopyWallet = () => {
                           </Typography>
                         </Box>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: { xs: 'stretch', sm: 'flex-end' } }}>
                           <Button
                             variant="contained"
                             color="primary"
                             onClick={() => handleOpenCommissionModal(trader)}
-                            sx={{ fontWeight: 600 }}
+                            sx={{ fontWeight: 600, width: { xs: '100%', sm: 'auto' }, py: { xs: 1, sm: 0.75 } }}
                           >
                             Pay Commission ({formatCurrency(commissionDue)})
                           </Button>
@@ -783,22 +799,23 @@ const FundCopyWallet = () => {
                             border: 1,
                             borderColor: 'warning.light',
                             bgcolor: 'warning.lighter',
-                            p: 2,
+                            p: { xs: 1.5, sm: 2 },
                             mb: 2,
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1, mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                                 {traderDisplayName}
                               </Typography>
-                              <Chip label="SETTLEMENT PENDING" color="warning" size="small" />
+                              <Chip label="SETTLEMENT PENDING" color="warning" size="small" sx={{ fontWeight: 600, height: 22, fontSize: '0.7rem' }} />
                             </Box>
                             <Button
                               size="small"
                               variant="contained"
                               color="primary"
                               onClick={() => handleOpenCommissionModal(trader)}
+                              sx={{ width: { xs: '100%', sm: 'auto' }, fontWeight: 600 }}
                             >
                               Pay Commission ({formatCurrency(commissionDue)})
                             </Button>

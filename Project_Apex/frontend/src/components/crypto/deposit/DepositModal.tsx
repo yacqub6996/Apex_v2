@@ -178,32 +178,49 @@ export const DepositModal: React.FC<DepositModalProps> = ({
         PaperProps={{
           sx: {
             borderRadius: isMobile ? 0 : 3,
-            minHeight: isMobile ? '100vh' : '600px',
+            height: isMobile ? '100dvh' : 'auto',
+            maxHeight: isMobile ? '100dvh' : '90vh',
             m: isMobile ? 0 : 2,
-            pt: { xs: 'max(8px, env(safe-area-inset-top, 0px))', sm: 0 },
-            pb: { xs: 'max(8px, env(safe-area-inset-bottom, 0px))', sm: 0 },
             display: 'flex',
             flexDirection: 'column',
+            overflow: 'hidden',
           },
         }}
       >
-        <DialogTitle sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 1.5, sm: 2.5 }, pb: { xs: 1, sm: 2 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            pt: { xs: 'max(10px, env(safe-area-inset-top, 0px))', sm: 2.5 },
+            pb: { xs: 1.25, sm: 2 },
+            borderBottom: 1,
+            borderColor: 'divider',
+            flexShrink: 0,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography
                 variant="h6"
                 component="div"
                 sx={{
                   fontWeight: 600,
-                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                  fontSize: { xs: '1.05rem', sm: '1.25rem' },
                   lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {title}
               </Typography>
-              {subtitle && (
+              {subtitle && !isCommission && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
                   {subtitle}
+                </Typography>
+              )}
+              {isCommission && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, fontWeight: 500 }}>
+                  Performance Settlement • Equity Held in Escrow
                 </Typography>
               )}
             </Box>
@@ -213,9 +230,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               size="small"
               sx={{
                 color: 'text.secondary',
-                mt: -0.5,
-                mr: -0.5,
                 flexShrink: 0,
+                p: { xs: 0.75, sm: 1 },
               }}
             >
               <CloseIcon fontSize="small" />
@@ -225,13 +241,14 @@ export const DepositModal: React.FC<DepositModalProps> = ({
             activeStep={getStepIndex()}
             alternativeLabel
             sx={{
-              mt: { xs: 1.5, sm: 2 },
+              mt: { xs: 1.25, sm: 2 },
               '& .MuiStepLabel-label': {
-                fontSize: { xs: '0.7rem', sm: '0.8125rem' },
-                mt: { xs: 0.5, sm: 1 },
+                fontSize: { xs: '0.68rem', sm: '0.8125rem' },
+                mt: { xs: 0.25, sm: 0.75 },
+                fontWeight: 500,
               },
               '& .MuiStepIcon-root': {
-                fontSize: { xs: '1.25rem', sm: '1.5rem' },
+                fontSize: { xs: '1.15rem', sm: '1.4rem' },
               },
             }}
           >
@@ -243,7 +260,16 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           </Stepper>
         </DialogTitle>
 
-        <DialogContent dividers sx={{ p: { xs: 1.5, sm: 3 } }}>
+        <DialogContent
+          dividers={false}
+          sx={{
+            flex: 1,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            p: { xs: 1.75, sm: 3 },
+          }}
+        >
           {/* Error alerts */}
           {generateError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -267,6 +293,16 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               onNetworkChange={setNetwork}
               lockAmount={lockAmount}
               isCommission={isCommission}
+              settlementInfo={
+                metadataPayload
+                  ? {
+                      traderName: metadataPayload.trader_name,
+                      sessionProfit: metadataPayload.session_profit,
+                      feePercentage: metadataPayload.fee_percentage,
+                      heldReleasedEquity: metadataPayload.held_released_equity,
+                    }
+                  : null
+              }
             />
           )}
 
@@ -291,16 +327,28 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           )}
         </DialogContent>
 
-        <DialogActions sx={{ p: { xs: 1.5, sm: 2 } }}>
+        <DialogActions
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: { xs: 1.5, sm: 2 },
+            pb: { xs: 'max(12px, env(safe-area-inset-bottom, 0px))', sm: 2 },
+            borderTop: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            flexShrink: 0,
+            gap: 1.5,
+          }}
+        >
           {step === 'input' && (
             <>
-              <Button onClick={handleClose} variant="outlined">
+              <Button onClick={handleClose} variant="outlined" sx={{ minWidth: 90 }}>
                 Cancel
               </Button>
               <Button
                 onClick={handleGenerateClick}
                 variant="contained"
                 disabled={isGenerating || parseFloat(amount) < (isCommission ? 0.01 : 50)}
+                sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 150 }}
               >
                 {isGenerating ? 'Generating...' : 'Generate Address'}
               </Button>

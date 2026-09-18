@@ -21,6 +21,13 @@ import LockIcon from '@mui/icons-material/Lock'
 import { useNetworks, useCryptoRates } from '@/services/crypto'
 import type { Asset, NetworkKey } from '@/types/crypto'
 
+interface SettlementInfo {
+  traderName?: string
+  sessionProfit?: number
+  feePercentage?: number
+  heldReleasedEquity?: number
+}
+
 interface DepositInputStepProps {
   amount: string
   asset: Asset
@@ -30,6 +37,7 @@ interface DepositInputStepProps {
   onNetworkChange: (network: NetworkKey) => void
   lockAmount?: boolean
   isCommission?: boolean
+  settlementInfo?: SettlementInfo | null
 }
 
 const ASSETS: { value: Asset; label: string }[] = [
@@ -48,6 +56,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   onNetworkChange,
   lockAmount = false,
   isCommission = false,
+  settlementInfo,
 }) => {
   const { data: networks, isLoading: networksLoading } = useNetworks()
   const { data: rates } = useCryptoRates()
@@ -83,16 +92,86 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
-      <Typography variant="body2" color="text.secondary">
-        {isCommission
-          ? 'This payment settles your trader performance commission. A $5.00 blockchain network fee is added to cover transaction gas and processing.'
-          : 'Enter the amount you want to deposit in USD. A $5.00 VAT fee will be added.'}
-      </Typography>
+      {/* Session Settlement Summary Card */}
+      {isCommission && settlementInfo && (
+        <Box
+          sx={{
+            p: { xs: 1.5, sm: 2 },
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(99, 102, 241, 0.08)' : 'rgba(99, 102, 241, 0.04)',
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'primary.light',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <LockIcon sx={{ fontSize: 16 }} />
+              Session Settlement Details
+            </Typography>
+            {settlementInfo.traderName && (
+              <Chip
+                label={settlementInfo.traderName}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 600, height: 22, fontSize: '0.72rem' }}
+              />
+            )}
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+              gap: { xs: 1, sm: 1.5 },
+              p: 1.25,
+              bgcolor: 'background.paper',
+              borderRadius: 1.5,
+              mb: 1.25,
+            }}
+          >
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Closed Session Profit
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>
+                +${(settlementInfo.sessionProfit ?? 0).toFixed(2)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Performance Fee
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {settlementInfo.feePercentage ?? 20}%
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Held Equity to Unlock
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: 'warning.main' }}>
+                ${(settlementInfo.heldReleasedEquity ?? 0).toFixed(2)}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.45 }}>
+            Your liquidated equity (${(settlementInfo.heldReleasedEquity ?? 0).toFixed(2)}) is held safely in escrow. Settling this performance commission unlocks your funds and deposits them directly into your <strong>Copy Trading Wallet</strong> upon blockchain confirmation.
+          </Typography>
+        </Box>
+      )}
+
+      {!isCommission && (
+        <Typography variant="body2" color="text.secondary">
+          Enter the amount you want to deposit in USD. A $5.00 VAT fee will be added.
+        </Typography>
+      )}
 
       {/* Amount Input */}
       <Box>
         <TextField
-          label={isCommission ? "Trader Commission (USD)" : "Deposit Amount (USD)"}
+          label={isCommission ? "Trader Performance Commission (USD)" : "Deposit Amount (USD)"}
           value={amount}
           onChange={(e) => {
             if (!lockAmount) {
@@ -113,7 +192,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
               <InputAdornment position="end">
                 <Chip
                   icon={<LockIcon sx={{ fontSize: '13px !important' }} />}
-                  label="Locked"
+                  label="Fixed Commission"
                   size="small"
                   variant="outlined"
                   color="primary"
@@ -134,6 +213,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
                     color: 'text.primary',
                     cursor: 'default',
                     fontWeight: 600,
+                    WebkitTextFillColor: 'unset',
                   },
                 }
               : undefined,
@@ -142,6 +222,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
             min: minAmount,
             step: 0.01,
             readOnly: lockAmount,
+            inputMode: lockAmount ? 'none' : 'decimal',
           }}
           error={usdAmount > 0 && !isValidAmount}
           helperText={
