@@ -28,7 +28,6 @@ export const DashboardActions = () => {
 
     const handleWithdrawSuccess = () => {
         toast.success("Withdrawal request submitted successfully. Awaiting admin approval.");
-        setWithdrawDialogOpen(false);
     };
 
     return (
@@ -89,10 +88,8 @@ export const DashboardActions = () => {
             {/* Withdraw Modal */}
             <WithdrawalModal
                 open={withdrawDialogOpen}
-                onClose={() => {
-                    setWithdrawDialogOpen(false);
-                    handleWithdrawSuccess();
-                }}
+                onClose={() => setWithdrawDialogOpen(false)}
+                onSuccess={handleWithdrawSuccess}
                 walletType="main"
             />
         </Box>

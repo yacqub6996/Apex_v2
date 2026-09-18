@@ -17,9 +17,11 @@ import {
   Box,
   Chip,
   Typography,
+  IconButton,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import { WithdrawalInputStep } from './WithdrawalInputStep'
 import { WithdrawalReviewStep } from './WithdrawalReviewStep'
 import { WithdrawalPendingStep } from './WithdrawalPendingStep'
@@ -31,6 +33,7 @@ export type WalletType = 'main' | 'copy' | 'long-term'
 interface WithdrawalModalProps {
   open: boolean
   onClose: () => void
+  onSuccess?: () => void
   walletType?: WalletType
 }
 
@@ -39,6 +42,7 @@ const steps = ['Enter Details', 'Review', 'Confirmation']
 export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({ 
   open, 
   onClose, 
+  onSuccess,
   walletType = 'main' 
 }) => {
   const theme = useTheme()
@@ -58,7 +62,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   } = useWithdrawalFlow({
     walletType,
     onSuccess: () => {
-      // Withdrawal submitted successfully
+      onSuccess?.()
     },
     onError: (error) => {
       console.error('Withdrawal error:', error)
@@ -98,12 +102,18 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       PaperProps={{
         sx: {
           borderRadius: isMobile ? 0 : 3,
-          minHeight: isMobile ? '100vh' : '600px',
+          height: isMobile ? '100dvh' : 'auto',
+          minHeight: isMobile ? '100dvh' : '600px',
+          maxHeight: isMobile ? '100dvh' : '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          m: isMobile ? 0 : 2,
         },
       }}
     >
-      <DialogTitle>
-        <Box sx={{ mb: 2 }}>
+      <DialogTitle sx={{ flexShrink: 0, p: { xs: 2, sm: 3 }, pb: { xs: 1.5, sm: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="h6">Crypto Withdrawal</Typography>
             {walletType !== 'main' && (
@@ -115,6 +125,15 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               />
             )}
           </Box>
+          <IconButton
+            edge="end"
+            onClick={handleClose}
+            aria-label="close"
+            size="small"
+            disabled={isSubmitting}
+          >
+            <CloseIcon />
+          </IconButton>
         </Box>
         <Stepper activeStep={getStepIndex()} alternativeLabel>
           {steps.map((label) => (
@@ -125,7 +144,15 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         </Stepper>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: { xs: 2, sm: 3 } }}>
+      <DialogContent
+        dividers
+        sx={{
+          p: { xs: 2, sm: 3 },
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+        }}
+      >
         {/* KYC Warning */}
         {!kycApproved && (
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -171,19 +198,21 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
-        {step === 'input' && (
-          <Button onClick={handleClose} variant="outlined" fullWidth>
-            Cancel
-          </Button>
-        )}
+      {step !== 'review' && (
+        <DialogActions sx={{ p: { xs: 1.5, sm: 2 }, flexShrink: 0 }}>
+          {step === 'input' && (
+            <Button onClick={handleClose} variant="outlined" fullWidth>
+              Cancel
+            </Button>
+          )}
 
-        {step === 'pending' && (
-          <Button onClick={handleClose} variant="contained" fullWidth>
-            Done
-          </Button>
-        )}
-      </DialogActions>
+          {step === 'pending' && (
+            <Button onClick={handleClose} variant="contained" fullWidth>
+              Done
+            </Button>
+          )}
+        </DialogActions>
+      )}
     </Dialog>
   )
 }
