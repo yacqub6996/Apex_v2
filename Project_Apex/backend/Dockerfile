@@ -7,7 +7,8 @@ WORKDIR /app
 
 # 2. Environment Variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 # 3. Install System Dependencies
 RUN apt-get update \

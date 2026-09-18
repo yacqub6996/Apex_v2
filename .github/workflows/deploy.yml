@@ -37,6 +37,7 @@ jobs:
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
           script: |
+            set -e
             # 1. Go to the manual folder we created on the VPS
             cd /home/apex-deployment
             
