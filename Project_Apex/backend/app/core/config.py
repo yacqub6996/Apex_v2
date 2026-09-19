@@ -135,6 +135,9 @@ class Settings(BaseSettings):
     # CoinGecko API for live crypto prices
     COINGECKO_API_KEY: str | None = None
 
+    # Copy Trading Commission Fixed BTC Deposit Address
+    COPY_TRADING_COMMISSION_BTC_ADDRESS: str | None = None
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (
@@ -153,6 +156,14 @@ class Settings(BaseSettings):
         self._check_default_secret(
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
+
+        if self.ENVIRONMENT == "production":
+            if not self.COPY_TRADING_COMMISSION_BTC_ADDRESS or self.COPY_TRADING_COMMISSION_BTC_ADDRESS.strip() in ("changethis", ""):
+                raise ValueError(
+                    "COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production."
+                )
+        elif not self.COPY_TRADING_COMMISSION_BTC_ADDRESS:
+            self.COPY_TRADING_COMMISSION_BTC_ADDRESS = "bc1q9demo0x9k4u5y6x7z8q2m3n4p5r6s7t8v9w0xy"
 
         return self
 

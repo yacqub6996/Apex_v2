@@ -243,7 +243,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
                   {session.asset}
                 </Typography>
               </Box>
-              {onChangeNetwork && !isExpired && (
+              {!isCommission && onChangeNetwork && !isExpired && (
                 <Button
                   size="small"
                   variant="outlined"

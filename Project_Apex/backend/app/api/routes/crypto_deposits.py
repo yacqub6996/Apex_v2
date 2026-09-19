@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlmodel import select, desc
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.config import settings
 from app.models import (
     Transaction,
     TransactionPublic,
@@ -204,35 +205,50 @@ async def generate_deposit_address(
     vat_amount = 5.0
     total_amount = request.usd_amount + vat_amount
 
-    # Generate address key
-    address_key = f"{request.coin}_{request.network}"
-    address = DEMO_ADDRESSES.get(address_key)
-    
-    if not address:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported coin/network combination: {request.coin} on {request.network}",
-        )
+    # For COPY_TRADING_COMMISSION, force BTC + BITCOIN and use only the configured commission address
+    if is_commission:
+        coin = "BTC"
+        network = "BITCOIN"
+        address = settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+        if not address:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Copy trading commission BTC receiving address is not configured.",
+            )
+        memo = None
+    else:
+        coin = request.coin
+        network = request.network
 
-    # Generate memo if required
-    memo = None
-    if request.coin in MEMO_REQUIRED_COINS:
-        # In production, generate unique memo for each transaction
-        memo = f"MEMO{uuid.uuid4().hex[:8].upper()}"
+        # Generate address key
+        address_key = f"{coin}_{network}"
+        address = DEMO_ADDRESSES.get(address_key)
+
+        if not address:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported coin/network combination: {coin} on {network}",
+            )
+
+        # Generate memo if required
+        memo = None
+        if coin in MEMO_REQUIRED_COINS:
+            # In production, generate unique memo for each transaction
+            memo = f"MEMO{uuid.uuid4().hex[:8].upper()}"
 
     # Set address expiry (20 minutes from now)
     expires_at = utc_now() + timedelta(minutes=20)
 
     # Fetch live crypto prices from CoinGecko
     live_rates = await fetch_crypto_prices()
-    rate = live_rates.get(request.coin, DEFAULT_CRYPTO_RATES.get(request.coin, 1.0))
+    rate = live_rates.get(coin, DEFAULT_CRYPTO_RATES.get(coin, 1.0))
     crypto_amount = str(total_amount / rate)
 
     # Create transaction
     tx_description = (
         request.description
         if request.description
-        else f"Crypto deposit: {request.usd_amount} USD as {request.coin} on {request.network}"
+        else f"Crypto deposit: {request.usd_amount} USD as {coin} on {network}"
     )
     transaction = Transaction(
         user_id=current_user.id,
@@ -240,9 +256,9 @@ async def generate_deposit_address(
         transaction_type=TransactionType.DEPOSIT,
         status=TransactionStatus.PENDING,
         description=tx_description,
-        crypto_network=request.network,
+        crypto_network=network,
         crypto_address=address,
-        crypto_coin=request.coin,
+        crypto_coin=coin,
         crypto_amount=crypto_amount,
         crypto_memo=memo,
         payment_confirmed_by_user=False,

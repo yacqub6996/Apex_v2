@@ -90,9 +90,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     },
   })
 
+  const isCommission = Boolean(lockAmount || (metadataPayload && metadataPayload.type === 'COPY_TRADING_COMMISSION'))
+
   const [amount, setAmount] = useState<string>(initialAmount !== undefined ? initialAmount.toFixed(2) : '100')
-  const [asset, setAsset] = useState<Asset>('USDT')
-  const [network, setNetwork] = useState<NetworkKey>('TRON_TRC20')
+  const [asset, setAsset] = useState<Asset>(isCommission ? 'BTC' : 'USDT')
+  const [network, setNetwork] = useState<NetworkKey>(isCommission ? 'BITCOIN' : 'TRON_TRC20')
 
   useEffect(() => {
     if (open) {
@@ -101,10 +103,12 @@ export const DepositModal: React.FC<DepositModalProps> = ({
       } else {
         setAmount('100')
       }
+      if (isCommission) {
+        setAsset('BTC')
+        setNetwork('BITCOIN')
+      }
     }
-  }, [open, initialAmount])
-
-  const isCommission = Boolean(lockAmount || (metadataPayload && metadataPayload.type === 'COPY_TRADING_COMMISSION'))
+  }, [open, initialAmount, isCommission])
 
   // Show KYC warning when modal opens if user hasn't approved KYC
   useEffect(() => {
@@ -134,6 +138,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   }
 
   const handleRequestChangeNetwork = () => {
+    if (isCommission) return
     if (step === 'address' && depositSession && !depositSession.expired) {
       setConfirmChangeNetworkOpen(true)
       return
@@ -163,7 +168,9 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     if (isNaN(usdAmount) || usdAmount < minAmount) {
       return
     }
-    await handleGenerateAddress(asset, network, usdAmount, metadataPayload, description)
+    const targetAsset: Asset = isCommission ? 'BTC' : asset
+    const targetNetwork: NetworkKey = isCommission ? 'BITCOIN' : network
+    await handleGenerateAddress(targetAsset, targetNetwork, usdAmount, metadataPayload, description)
   }
 
   const handleConfirmClick = async () => {
@@ -336,7 +343,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               onConfirm={handleConfirmClick}
               isConfirming={isConfirming}
               isCommission={isCommission}
-              onChangeNetwork={handleRequestChangeNetwork}
+              onChangeNetwork={isCommission ? undefined : handleRequestChangeNetwork}
             />
           )}
 

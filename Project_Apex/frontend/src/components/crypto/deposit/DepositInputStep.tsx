@@ -82,13 +82,18 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
 
   // Auto-select first available network when asset changes
   React.useEffect(() => {
+    if (isCommission) {
+      if (asset !== 'BTC') onAssetChange('BTC')
+      if (network !== 'BITCOIN') onNetworkChange('BITCOIN')
+      return
+    }
     if (availableNetworks && availableNetworks.length > 0) {
       const currentValid = availableNetworks.find((n) => n.key === network)
       if (!currentValid) {
         onNetworkChange(availableNetworks[0].key as NetworkKey)
       }
     }
-  }, [asset, availableNetworks, network, onNetworkChange])
+  }, [asset, availableNetworks, network, onNetworkChange, isCommission, onAssetChange])
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
@@ -236,12 +241,13 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       </Box>
 
       {/* Asset Selection */}
-      <FormControl fullWidth size="small">
+      <FormControl fullWidth size="small" disabled={isCommission}>
         <InputLabel>Cryptocurrency</InputLabel>
         <Select
-          value={asset}
+          value={isCommission ? 'BTC' : asset}
           label="Cryptocurrency"
           onChange={(e) => onAssetChange(e.target.value as Asset)}
+          disabled={isCommission}
         >
           {ASSETS.map((a) => (
             <MenuItem key={a.value} value={a.value}>
@@ -249,15 +255,21 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
             </MenuItem>
           ))}
         </Select>
+        {isCommission && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <LockIcon sx={{ fontSize: 13 }} /> Performance commissions are accepted exclusively in Bitcoin (BTC).
+          </Typography>
+        )}
       </FormControl>
 
       {/* Network Selection */}
-      <FormControl fullWidth size="small" disabled={networksLoading}>
+      <FormControl fullWidth size="small" disabled={isCommission || networksLoading}>
         <InputLabel>Network</InputLabel>
         <Select
-          value={network}
+          value={isCommission ? 'BITCOIN' : network}
           label="Network"
           onChange={(e) => onNetworkChange(e.target.value as NetworkKey)}
+          disabled={isCommission}
         >
           {availableNetworks?.map((n) => (
             <MenuItem key={n.key} value={n.key}>
@@ -270,6 +282,11 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
             </MenuItem>
           ))}
         </Select>
+        {isCommission && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <LockIcon sx={{ fontSize: 13 }} /> Network locked to Bitcoin network for commission payment.
+          </Typography>
+        )}
       </FormControl>
 
       {/* Summary */}

@@ -6,6 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.pool import StaticPool
 
 from app.core.time import utc_now
+from app.core.config import settings
 from app.models import (
     CopyStatus,
     CopyTradingWallet,
@@ -179,11 +180,12 @@ async def test_copy_trading_commission_stop_holds_equity_and_admin_release(db_se
         current_user=user,
         request=req,
     )
-    assert gen_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
-    assert gen_res.address == "TQ2DeM0Addr3ss111111111111111111111111"
+    assert gen_res.address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
     tx = db_session.get(Transaction, uuid.UUID(gen_res.transaction_id))
     assert tx is not None
-    assert tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert tx.crypto_coin == "BTC"
+    assert tx.crypto_network == "BITCOIN"
+    assert tx.crypto_address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
     assert tx.status == TransactionStatus.PENDING
 
     # 8. Admin confirms the commission deposit
@@ -397,11 +399,10 @@ async def test_ordinary_deposit_still_credits_main_wallet(db_session: Session):
 
 
 @pytest.mark.anyio
-async def test_commission_and_ordinary_deposits_share_identical_address_resolution(db_session: Session):
-    """Verify that ordinary deposits and COPY_TRADING_COMMISSION deposits resolve to the
-    exact same hardcoded DEMO_ADDRESSES, without generating, deriving, or modifying addresses,
-    while strictly preserving commission-specific business rules ($0.01 min vs $50.00 min,
-    duplicate commission protection, held equity settlement).
+async def test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits_use_demo_addresses(db_session: Session):
+    """Verify that all COPY_TRADING_COMMISSION deposits strictly resolve to one fixed BTC address
+    on the Bitcoin network, regardless of requested coin/network, while ordinary deposits remain
+    completely unchanged and resolve to DEMO_ADDRESSES.
     """
     user = User(
         id=uuid.uuid4(),
@@ -413,7 +414,8 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
     db_session.add(user)
     db_session.commit()
 
-    # 1. Test USDT / TRON_TRC20 specifically
+    # 1. Test USDT / TRON_TRC20 specifically:
+    # Ordinary deposit resolves to DEMO_ADDRESSES["USDT_TRON_TRC20"]
     ordinary_req = GenerateAddressRequest(
         coin="USDT",
         network="TRON_TRC20",
@@ -424,7 +426,10 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
         current_user=user,
         request=ordinary_req,
     )
+    assert ordinary_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+    assert ordinary_res.address == "TQ2DeM0Addr3ss111111111111111111111111"
 
+    # Commission deposit requesting USDT/TRON must be forced to fixed BTC address on Bitcoin network
     dummy_copy_id = uuid.uuid4()
     commission_req = GenerateAddressRequest(
         coin="USDT",
@@ -444,21 +449,27 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
         request=commission_req,
     )
 
-    # Assert exact identity of resolved address:
-    assert ordinary_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
-    assert commission_res.address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
-    assert ordinary_res.address == commission_res.address
-    assert ordinary_res.address == "TQ2DeM0Addr3ss111111111111111111111111"
+    # Assert commission resolves to the configured fixed BTC address:
+    assert commission_res.address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+    assert commission_res.address != ordinary_res.address
 
-    # Verify underlying transaction record has the exact same receiving address
+    # Verify underlying transaction record:
     ord_tx = db_session.get(Transaction, uuid.UUID(ordinary_res.transaction_id))
     comm_tx = db_session.get(Transaction, uuid.UUID(commission_res.transaction_id))
     assert ord_tx is not None and comm_tx is not None
-    assert ord_tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
-    assert comm_tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
-    assert ord_tx.crypto_address == comm_tx.crypto_address
 
-    # 2. Test all other supported coin/network pairs to ensure full deterministic parity
+    assert ord_tx.crypto_coin == "USDT"
+    assert ord_tx.crypto_network == "TRON_TRC20"
+    assert ord_tx.crypto_address == DEMO_ADDRESSES["USDT_TRON_TRC20"]
+
+    assert comm_tx.crypto_coin == "BTC"
+    assert comm_tx.crypto_network == "BITCOIN"
+    assert comm_tx.crypto_address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+    assert comm_tx.crypto_memo is None
+
+    # 2. Test all supported coin/network pairs:
+    # Ordinary deposits must resolve strictly to DEMO_ADDRESSES[key]
+    # Commission deposits must resolve strictly to settings.COPY_TRADING_COMMISSION_BTC_ADDRESS as BTC/BITCOIN
     test_pairs = [
         ("BTC", "BITCOIN", 100.0, 10.0),
         ("ETH", "ETHEREUM_ERC20", 100.0, 15.0),
@@ -470,7 +481,7 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
 
     for coin, net, ord_amt, comm_amt in test_pairs:
         key = f"{coin}_{net}"
-        expected_addr = DEMO_ADDRESSES[key]
+        expected_demo_addr = DEMO_ADDRESSES[key]
 
         ord_r = await generate_deposit_address(
             session=db_session,
@@ -489,11 +500,39 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
             ),
         )
 
-        assert ord_r.address == expected_addr, f"Ordinary {key} resolved to {ord_r.address}, expected {expected_addr}"
-        assert comm_r.address == expected_addr, f"Commission {key} resolved to {comm_r.address}, expected {expected_addr}"
-        assert ord_r.address == comm_r.address, f"Mismatch between ordinary and commission address for {key}"
+        assert ord_r.address == expected_demo_addr, f"Ordinary {key} resolved to {ord_r.address}, expected {expected_demo_addr}"
+        assert comm_r.address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS, f"Commission {key} should use fixed BTC address, got {comm_r.address}"
 
-    # 3. Confirm that business rules still differentiate them:
+        comm_rec = db_session.get(Transaction, uuid.UUID(comm_r.transaction_id))
+        assert comm_rec.crypto_coin == "BTC"
+        assert comm_rec.crypto_network == "BITCOIN"
+        assert comm_rec.crypto_address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+
+    # 3. Test dynamic environment configuration:
+    original_configured = settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+    try:
+        custom_btc_addr = "bc1qcustomcommissionfixedaddress0001"
+        settings.COPY_TRADING_COMMISSION_BTC_ADDRESS = custom_btc_addr
+        custom_c_id = uuid.uuid4()
+        custom_comm_res = await generate_deposit_address(
+            session=db_session,
+            current_user=user,
+            request=GenerateAddressRequest(
+                coin="ETH",
+                network="ETHEREUM_ERC20",
+                usd_amount=30.0,
+                metadata_payload={"type": "COPY_TRADING_COMMISSION", "copy_id": str(custom_c_id)},
+            ),
+        )
+        assert custom_comm_res.address == custom_btc_addr
+        custom_tx = db_session.get(Transaction, uuid.UUID(custom_comm_res.transaction_id))
+        assert custom_tx.crypto_address == custom_btc_addr
+        assert custom_tx.crypto_coin == "BTC"
+        assert custom_tx.crypto_network == "BITCOIN"
+    finally:
+        settings.COPY_TRADING_COMMISSION_BTC_ADDRESS = original_configured
+
+    # 4. Confirm business rules:
     # Ordinary deposit below $50 must fail
     with pytest.raises(HTTPException) as exc_info:
         await generate_deposit_address(
@@ -504,8 +543,53 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
     assert exc_info.value.status_code == 400
     assert "Minimum deposit is $50.00" in exc_info.value.detail
 
-    # Commission deposit below $50 (e.g. $25.00) succeeded (commission_res above)
+    # Commission deposit below $50 (e.g. $25.00) succeeded
     assert commission_res.transaction_id is not None
+
+
+def test_production_environment_requires_commission_btc_address():
+    """Verify that Settings raises ValidationError when ENVIRONMENT='production'
+    without an explicitly configured COPY_TRADING_COMMISSION_BTC_ADDRESS."""
+    from pydantic import ValidationError
+    from app.core.config import Settings
+
+    # Missing / empty address in production must fail
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            PROJECT_NAME="Apex",
+            POSTGRES_SERVER="localhost",
+            POSTGRES_USER="test",
+            FIRST_SUPERUSER="admin@example.com",
+            FIRST_SUPERUSER_PASSWORD="password123",
+            ENVIRONMENT="production",
+            COPY_TRADING_COMMISSION_BTC_ADDRESS=None,
+        )
+    assert "COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production" in str(exc_info.value)
+
+    # "changethis" in production must fail
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            PROJECT_NAME="Apex",
+            POSTGRES_SERVER="localhost",
+            POSTGRES_USER="test",
+            FIRST_SUPERUSER="admin@example.com",
+            FIRST_SUPERUSER_PASSWORD="password123",
+            ENVIRONMENT="production",
+            COPY_TRADING_COMMISSION_BTC_ADDRESS="changethis",
+        )
+    assert "COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production" in str(exc_info.value)
+
+    # Explicitly configured address in production succeeds
+    valid_prod_settings = Settings(
+        PROJECT_NAME="Apex",
+        POSTGRES_SERVER="localhost",
+        POSTGRES_USER="test",
+        FIRST_SUPERUSER="admin@example.com",
+        FIRST_SUPERUSER_PASSWORD="password123",
+        ENVIRONMENT="production",
+        COPY_TRADING_COMMISSION_BTC_ADDRESS="bc1qprod9876543210address",
+    )
+    assert valid_prod_settings.COPY_TRADING_COMMISSION_BTC_ADDRESS == "bc1qprod9876543210address"
 
 
 def test_admin_pending_deposits_order_and_commission_metadata(db_session: Session):
@@ -708,9 +792,13 @@ if __name__ == "__main__":
         print("✓ Passed!")
 
     with Session(engine) as s:
-        print("Running test_commission_and_ordinary_deposits_share_identical_address_resolution...")
-        asyncio.run(test_commission_and_ordinary_deposits_share_identical_address_resolution(s))
+        print("Running test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits_use_demo_addresses...")
+        asyncio.run(test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits_use_demo_addresses(s))
         print("✓ Passed!")
+
+    print("Running test_production_environment_requires_commission_btc_address...")
+    test_production_environment_requires_commission_btc_address()
+    print("✓ Passed!")
 
     with Session(engine) as s:
         print("Running test_admin_pending_deposits_order_and_commission_metadata...")
