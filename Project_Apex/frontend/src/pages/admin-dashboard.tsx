@@ -6,11 +6,18 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
+  IconButton,
   InputAdornment,
   Paper,
   Stack,
+  TablePagination,
   TextField,
+  Tooltip,
   Typography,
   Table,
   TableBody,
@@ -24,8 +31,10 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import TrendingUpOutlinedIcon from "@mui/icons-material/TrendingUpOutlined";
-import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PendingIcon from "@mui/icons-material/Pending";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { AdminDashboardLayout } from "@/components/admin/admin-dashboard-layout";
 import { WithdrawalApprovals } from "@/components/admin/withdrawal-approvals";
 import { Panel } from "@/components/shared";
@@ -60,16 +69,23 @@ export const Dashboard = () => {
   const [peopleOpen, setPeopleOpen] = useState(true);
   const [searchInput, setSearchInput] = useState("");
 
+  const [depositPage, setDepositPage] = useState(0);
+  const [depositRowsPerPage, setDepositRowsPerPage] = useState(10);
+  const [depositFilter, setDepositFilter] = useState<"all" | "confirmed" | "unconfirmed">("all");
+  const [depositToApprove, setDepositToApprove] = useState<AdminDepositItem | null>(null);
+  const [depositToReject, setDepositToReject] = useState<AdminDepositItem | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("");
+
   const approvalsRef = useRef<HTMLDivElement | null>(null);
   const operationsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    // Keep Approvals panel expanded by default on all viewports so deposits queue is immediately discoverable
+    setApprovalsOpen(true);
     if (isDesktop) {
-      setApprovalsOpen(true);
       setOperationsOpen(true);
       setPeopleOpen(true);
     } else {
-      setApprovalsOpen(false);
       setOperationsOpen(false);
       setPeopleOpen(false);
     }
@@ -78,6 +94,7 @@ export const Dashboard = () => {
   const dashboardQuery = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: () => AdminService.adminGetAdminDashboardSummary(),
+    refetchInterval: 15000,
   });
 
   const usersQuery = useQuery({
@@ -149,6 +166,16 @@ export const Dashboard = () => {
     onError: (err: Error) => toast.error(err?.message ?? "Failed to approve deposit"),
   });
 
+  const rejectDeposit = useMutation({
+    mutationFn: ({ transactionId, reason }: { transactionId: string; reason?: string }) =>
+      AdminService.adminRejectCryptoDeposit(transactionId, reason),
+    onSuccess: () => {
+      toast.success("Deposit rejected");
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    },
+    onError: (err: Error) => toast.error(err?.message ?? "Failed to reject deposit"),
+  });
+
   const pushROIExecution = useMutation({
     mutationFn: (body: ROIExecutionPushRequest) => AdminExecutionsService.adminExecutionsPushRoiExecution(body),
     onSuccess: () => {
@@ -199,6 +226,54 @@ export const Dashboard = () => {
       ? ((dashboardQuery.data as { pending_withdrawals?: unknown } | undefined)?.pending_withdrawals as unknown[]).length
       : 0);
 
+  const confirmedDepositsCount = useMemo(
+    () => pendingDeposits.filter((d) => d.payment_confirmed_by_user).length,
+    [pendingDeposits],
+  );
+  const unconfirmedDepositsCount = pendingDeposits.length - confirmedDepositsCount;
+
+  const filteredDeposits = useMemo(() => {
+    if (depositFilter === "confirmed") {
+      return pendingDeposits.filter((d) => d.payment_confirmed_by_user);
+    }
+    if (depositFilter === "unconfirmed") {
+      return pendingDeposits.filter((d) => !d.payment_confirmed_by_user);
+    }
+    return pendingDeposits;
+  }, [pendingDeposits, depositFilter]);
+
+  const pagedDeposits = useMemo(() => {
+    if (depositRowsPerPage === -1) {
+      return filteredDeposits;
+    }
+    const start = depositPage * depositRowsPerPage;
+    return filteredDeposits.slice(start, start + depositRowsPerPage);
+  }, [filteredDeposits, depositPage, depositRowsPerPage]);
+
+  useEffect(() => {
+    if (depositRowsPerPage !== -1 && depositPage > 0 && depositPage * depositRowsPerPage >= filteredDeposits.length) {
+      setDepositPage(0);
+    }
+  }, [filteredDeposits.length, depositPage, depositRowsPerPage]);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const el = document.createElement("textarea");
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
+      toast.success("Address copied to clipboard");
+    } catch {
+      toast.error("Failed to copy address");
+    }
+  };
+
   type SearchOption = {
     label: string;
     type: "user" | "trader" | "deposit" | "kyc";
@@ -224,12 +299,17 @@ export const Dashboard = () => {
       })) ?? [];
 
     const deposits =
-      pendingDeposits.map((d) => ({
-        label: `Deposit ${formatCurrency(d.amount ?? 0)}`,
-        type: "deposit" as const,
-        id: d.id,
-        helper: d.crypto_network ?? "Deposit",
-      })) ?? [];
+      pendingDeposits.map((d) => {
+        const isComm =
+          d.metadata_payload?.type === "COPY_TRADING_COMMISSION" ||
+          (typeof d.description === "string" && d.description.toLowerCase().includes("commission"));
+        return {
+          label: `${isComm ? "Commission" : "Deposit"} ${formatCurrency(d.amount ?? 0)} - ${d.full_name || d.email}`,
+          type: "deposit" as const,
+          id: d.id,
+          helper: `${d.email} • ${d.crypto_network ?? "Network"}${d.payment_confirmed_by_user ? " • Submitted" : ""}`,
+        };
+      }) ?? [];
 
     const kycs =
       pendingKyc.map((k) => ({
@@ -268,6 +348,16 @@ export const Dashboard = () => {
   const actionables = useMemo(
     () => [
       {
+        title: "Pending deposits",
+        count: pendingDeposits.length,
+        helper: `${confirmedDepositsCount} submitted`,
+        icon: PaymentsOutlinedIcon,
+        onClick: () => {
+          setApprovalsOpen(true);
+          scrollToSection(approvalsRef);
+        },
+      },
+      {
         title: "Pending KYCs",
         count: pendingKyc.length,
         helper: "Needs review",
@@ -297,15 +387,8 @@ export const Dashboard = () => {
           scrollToSection(operationsRef);
         },
       },
-      {
-        title: "Open incidents",
-        count: 0,
-        helper: "Monitoring",
-        icon: ReportProblemOutlinedIcon,
-        onClick: () => {},
-      },
     ],
-    [pendingKyc.length, pendingWithdrawalsCount, traderOptions.length],
+    [pendingDeposits.length, confirmedDepositsCount, pendingKyc.length, pendingWithdrawalsCount, traderOptions.length],
   );
 
   const globalSearch = (
@@ -469,38 +552,247 @@ export const Dashboard = () => {
                     ))}
                   </Stack>
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography variant="subtitle2" gutterBottom sx={{ mt: { xs: 0.5, sm: 0 } }}>
-                    Deposits queue
-                  </Typography>
-                  <Stack spacing={1}>
-                    {pendingDeposits.length === 0 && (
+                <Grid size={{ xs: 12, md: 6 }} id="deposits">
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      Deposits queue ({pendingDeposits.length})
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                      <Chip
+                        label={`All (${pendingDeposits.length})`}
+                        size="small"
+                        color={depositFilter === "all" ? "primary" : "default"}
+                        variant={depositFilter === "all" ? "filled" : "outlined"}
+                        onClick={() => {
+                          setDepositFilter("all");
+                          setDepositPage(0);
+                        }}
+                        sx={{ cursor: "pointer", height: 24, fontSize: "0.75rem" }}
+                      />
+                      <Chip
+                        label={`Submitted (${confirmedDepositsCount})`}
+                        size="small"
+                        color={depositFilter === "confirmed" ? "success" : "default"}
+                        variant={depositFilter === "confirmed" ? "filled" : "outlined"}
+                        onClick={() => {
+                          setDepositFilter("confirmed");
+                          setDepositPage(0);
+                        }}
+                        sx={{ cursor: "pointer", height: 24, fontSize: "0.75rem" }}
+                      />
+                      <Chip
+                        label={`Awaiting (${unconfirmedDepositsCount})`}
+                        size="small"
+                        color={depositFilter === "unconfirmed" ? "warning" : "default"}
+                        variant={depositFilter === "unconfirmed" ? "filled" : "outlined"}
+                        onClick={() => {
+                          setDepositFilter("unconfirmed");
+                          setDepositPage(0);
+                        }}
+                        sx={{ cursor: "pointer", height: 24, fontSize: "0.75rem" }}
+                      />
+                    </Stack>
+                  </Box>
+
+                  {filteredDeposits.length === 0 ? (
+                    <Paper variant="outlined" sx={{ p: 2, textAlign: "center", borderRadius: 1.5 }}>
                       <Typography variant="body2" color="text.secondary">
-                        No pending deposits.
+                        {pendingDeposits.length === 0
+                          ? "No pending deposits."
+                          : `No deposits found matching "${depositFilter}" filter.`}
                       </Typography>
-                    )}
-                    {pendingDeposits.slice(0, 4).map((deposit) => (
-                      <Stack
-                        key={deposit.id}
-                        direction="row"
-                        spacing={1} justifyContent="space-between" alignItems="flex-start"
-                        sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 1 }}
-                      >
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle2">{formatCurrency(deposit.amount ?? 0)}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {deposit.crypto_network ?? "Network"} - {deposit.crypto_address ?? "Address"}
-                          </Typography>
-                        </Box>
-                        <Button
-                          variant="contained" size="small" sx={{ alignSelf: "flex-start" }} onClick={() => approveDeposit.mutate({ transaction_id: deposit.id })}
-                          disabled={approveDeposit.isPending}
-                        >
-                          Approve
-                        </Button>
-                      </Stack>
-                    ))}
-                  </Stack>
+                    </Paper>
+                  ) : (
+                    <Stack spacing={1.5}>
+                      {pagedDeposits.map((deposit) => {
+                        const isCommission =
+                          deposit.metadata_payload?.type === "COPY_TRADING_COMMISSION" ||
+                          (typeof deposit.description === "string" && deposit.description.toLowerCase().includes("commission"));
+
+                        return (
+                          <Paper
+                            key={deposit.id}
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 1,
+                              bgcolor: deposit.payment_confirmed_by_user ? "action.hover" : "background.paper",
+                              borderColor: deposit.payment_confirmed_by_user ? "success.main" : "divider",
+                            }}
+                          >
+                            {/* Top row: Amount & Status Badges */}
+                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1, flexWrap: "wrap" }}>
+                              <Box>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                                  {formatCurrency(deposit.amount ?? 0)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  Created: {formatDateTime(deposit.created_at)}
+                                </Typography>
+                              </Box>
+                              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                                {isCommission && (
+                                  <Chip
+                                    label="COPY TRADING COMMISSION"
+                                    size="small"
+                                    color="primary"
+                                    sx={{ fontWeight: 600, fontSize: "0.68rem", height: 22 }}
+                                  />
+                                )}
+                                {deposit.payment_confirmed_by_user ? (
+                                  <Chip
+                                    icon={<CheckCircleIcon sx={{ fontSize: "0.95rem !important" }} />}
+                                    label="Payment Submitted for Verification"
+                                    size="small"
+                                    color="success"
+                                    sx={{ fontWeight: 600, fontSize: "0.68rem", height: 22 }}
+                                  />
+                                ) : (
+                                  <Chip
+                                    icon={<PendingIcon sx={{ fontSize: "0.95rem !important" }} />}
+                                    label="Awaiting User Payment"
+                                    size="small"
+                                    color="warning"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 600, fontSize: "0.68rem", height: 22 }}
+                                  />
+                                )}
+                              </Stack>
+                            </Box>
+
+                            {/* User details */}
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {deposit.full_name ? `${deposit.full_name} (${deposit.email})` : deposit.email}
+                              </Typography>
+                              {deposit.payment_confirmed_at && (
+                                <Typography variant="caption" color="success.main" sx={{ display: "block" }}>
+                                  Submitted: {formatDateTime(deposit.payment_confirmed_at)}
+                                </Typography>
+                              )}
+                            </Box>
+
+                            {/* Crypto info & address */}
+                            <Box
+                              sx={{
+                                bgcolor: "background.default",
+                                p: 1,
+                                borderRadius: 1,
+                                border: "1px solid",
+                                borderColor: "divider",
+                              }}
+                            >
+                              <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 500 }}>
+                                {deposit.crypto_coin ?? "Crypto"} ({deposit.crypto_network ?? "Network"})
+                                {deposit.crypto_amount != null ? ` • ${deposit.crypto_amount} ${deposit.crypto_coin ?? ""}` : ""}
+                              </Typography>
+                              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5, mt: 0.25 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontFamily: "monospace",
+                                    wordBreak: "break-all",
+                                    color: "text.primary",
+                                    fontSize: "0.75rem",
+                                  }}
+                                >
+                                  {deposit.crypto_address || "No address generated"}
+                                </Typography>
+                                {deposit.crypto_address && (
+                                  <Tooltip title="Copy address">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => copyToClipboard(deposit.crypto_address!)}
+                                      sx={{ p: 0.25, flexShrink: 0 }}
+                                    >
+                                      <ContentCopyIcon sx={{ fontSize: "0.9rem" }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            </Box>
+
+                            {/* Commission Metadata Context */}
+                            {isCommission && (
+                              <Box
+                                sx={{
+                                  bgcolor: "action.selected",
+                                  border: "1px dashed",
+                                  borderColor: "primary.main",
+                                  p: 1,
+                                  borderRadius: 1,
+                                }}
+                              >
+                                <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main", display: "block" }}>
+                                  Copy Trading Context
+                                </Typography>
+                                {deposit.metadata_payload?.trader_name && (
+                                  <Typography variant="caption" sx={{ display: "block" }}>
+                                    Trader: <strong>{deposit.metadata_payload.trader_name}</strong>
+                                  </Typography>
+                                )}
+                                {deposit.metadata_payload?.held_released_equity != null && (
+                                  <Typography variant="caption" sx={{ display: "block" }}>
+                                    Held Released Equity to Unlock:{" "}
+                                    <strong>{formatCurrency(deposit.metadata_payload.held_released_equity)}</strong>
+                                  </Typography>
+                                )}
+                                {deposit.metadata_payload?.copy_id && (
+                                  <Typography variant="caption" sx={{ display: "block", color: "text.secondary", fontFamily: "monospace", fontSize: "0.7rem" }}>
+                                    Copy ID: {deposit.metadata_payload.copy_id}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+
+                            {/* Action buttons */}
+                            <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 0.5 }}>
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                onClick={() => {
+                                  setDepositToReject(deposit);
+                                  setRejectReason("");
+                                }}
+                                disabled={rejectDeposit.isPending || approveDeposit.isPending}
+                              >
+                                Reject
+                              </Button>
+                              <Button
+                                variant="contained"
+                                color="success"
+                                size="small"
+                                onClick={() => setDepositToApprove(deposit)}
+                                disabled={rejectDeposit.isPending || approveDeposit.isPending}
+                              >
+                                Approve
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  )}
+
+                  {filteredDeposits.length > 0 && (
+                    <TablePagination
+                      component="div"
+                      count={filteredDeposits.length}
+                      page={depositPage}
+                      onPageChange={(_, newPage) => setDepositPage(newPage)}
+                      rowsPerPage={depositRowsPerPage}
+                      onRowsPerPageChange={(e) => {
+                        setDepositRowsPerPage(parseInt(e.target.value, 10));
+                        setDepositPage(0);
+                      }}
+                      rowsPerPageOptions={[5, 10, 25, { label: "All", value: -1 }]}
+                      sx={{ borderTop: "1px solid", borderColor: "divider", mt: 1 }}
+                    />
+                  )}
                 </Grid>
                 <Grid size={{ xs: 12 }}>
                   <Typography variant="subtitle2" gutterBottom>
@@ -770,6 +1062,116 @@ export const Dashboard = () => {
           )}
         </Panel>
       </Stack>
+
+      {/* Approval Confirmation Dialog */}
+      <Dialog
+        open={Boolean(depositToApprove)}
+        onClose={() => setDepositToApprove(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Approve Deposit</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Are you sure you want to approve this deposit of{" "}
+            <strong>{depositToApprove ? formatCurrency(depositToApprove.amount ?? 0) : ""}</strong> for{" "}
+            <strong>{depositToApprove?.full_name ? `${depositToApprove.full_name} (${depositToApprove.email})` : depositToApprove?.email}</strong>?
+          </Typography>
+          {depositToApprove?.metadata_payload?.type === "COPY_TRADING_COMMISSION" && (
+            <Typography variant="caption" color="primary.main" sx={{ mt: 1, display: "block" }}>
+              Note: This is a Copy Trading Commission payment. Approving will unlock{" "}
+              {depositToApprove.metadata_payload.held_released_equity != null
+                ? formatCurrency(depositToApprove.metadata_payload.held_released_equity)
+                : "held equity"}{" "}
+              to the user's copy trading wallet.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDepositToApprove(null)} disabled={approveDeposit.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={approveDeposit.isPending}
+            onClick={() => {
+              if (depositToApprove) {
+                approveDeposit.mutate(
+                  { transaction_id: depositToApprove.id },
+                  {
+                    onSettled: () => setDepositToApprove(null),
+                  },
+                );
+              }
+            }}
+          >
+            {approveDeposit.isPending ? "Approving..." : "Confirm Approval"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rejection Confirmation Dialog */}
+      <Dialog
+        open={Boolean(depositToReject)}
+        onClose={() => {
+          setDepositToReject(null);
+          setRejectReason("");
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Reject Deposit</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Are you sure you want to reject this deposit of{" "}
+            <strong>{depositToReject ? formatCurrency(depositToReject.amount ?? 0) : ""}</strong> for{" "}
+            <strong>{depositToReject?.full_name ? `${depositToReject.full_name} (${depositToReject.email})` : depositToReject?.email}</strong>?
+          </Typography>
+          <TextField
+            label="Rejection Reason (Optional)"
+            fullWidth
+            size="small"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="e.g., Payment not received, expired session"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDepositToReject(null);
+              setRejectReason("");
+            }}
+            disabled={rejectDeposit.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={rejectDeposit.isPending}
+            onClick={() => {
+              if (depositToReject) {
+                rejectDeposit.mutate(
+                  {
+                    transactionId: depositToReject.id,
+                    reason: rejectReason.trim() || undefined,
+                  },
+                  {
+                    onSettled: () => {
+                      setDepositToReject(null);
+                      setRejectReason("");
+                    },
+                  },
+                );
+              }
+            }}
+          >
+            {rejectDeposit.isPending ? "Rejecting..." : "Confirm Rejection"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </AdminDashboardLayout>
   );
 };

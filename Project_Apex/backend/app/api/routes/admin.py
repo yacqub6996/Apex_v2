@@ -54,10 +54,13 @@ class AdminDepositItem(SQLModel):
     id: uuid.UUID
     user_id: uuid.UUID
     email: str
+    full_name: str | None = None
     amount: float
     status: str
     transaction_type: str
     created_at: datetime
+    description: str | None = None
+    metadata_payload: dict[str, Any] | None = None
     # Crypto-specific fields
     crypto_network: str | None = None
     crypto_address: str | None = None
@@ -173,7 +176,7 @@ def get_admin_dashboard_summary(
         .join(User, cast(Any, User.id == Transaction.user_id))
         .where(Transaction.transaction_type == TransactionType.DEPOSIT)
         .where(Transaction.status == TransactionStatus.PENDING)
-        .order_by(cast(Any, Transaction.created_at))
+        .order_by(desc(cast(Any, Transaction.created_at)))
     ).all()
 
     pending_deposits_payload = [
@@ -181,10 +184,13 @@ def get_admin_dashboard_summary(
             id=tx.id,
             user_id=user.id,
             email=user.email,
+            full_name=user.full_name,
             amount=tx.amount,
             status=tx.status.value.lower(),
             transaction_type=tx.transaction_type.value.lower(),
             created_at=tx.created_at,
+            description=tx.description,
+            metadata_payload=tx.metadata_payload,
             crypto_network=tx.crypto_network,
             crypto_address=tx.crypto_address,
             crypto_coin=tx.crypto_coin,

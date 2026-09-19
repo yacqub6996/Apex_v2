@@ -6,10 +6,13 @@ export type AdminDepositItem = {
     id: string;
     user_id: string;
     email: string;
+    full_name?: string | null;
     amount: number;
     status: string;
     transaction_type: string;
     created_at: string;
+    description?: string | null;
+    metadata_payload?: Record<string, any> | null;
     crypto_network?: string | null;
     crypto_address?: string | null;
     crypto_coin?: string | null;

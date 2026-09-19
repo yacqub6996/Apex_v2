@@ -17,8 +17,10 @@ from app.models import (
     TransactionStatus,
     TransactionType,
     User,
+    UserRole,
     UserTraderCopy,
 )
+from app.api.routes.admin import get_admin_dashboard_summary
 from app.api.routes.copy_trading import stop_copy_relationship
 from app.api.routes.crypto_deposits import (
     generate_deposit_address,
@@ -505,6 +507,95 @@ async def test_commission_and_ordinary_deposits_share_identical_address_resoluti
     assert commission_res.transaction_id is not None
 
 
+def test_admin_pending_deposits_order_and_commission_metadata(db_session: Session):
+    admin = User(
+        id=uuid.uuid4(),
+        email="admin@example.com",
+        hashed_password="hash",
+        is_superuser=True,
+        role=UserRole.ADMIN,
+    )
+    user1 = User(
+        id=uuid.uuid4(),
+        email="user1@example.com",
+        full_name="Alice User",
+        hashed_password="hash",
+    )
+    user2 = User(
+        id=uuid.uuid4(),
+        email="user2@example.com",
+        full_name="Bob Trader",
+        hashed_password="hash",
+    )
+    db_session.add_all([admin, user1, user2])
+    db_session.commit()
+
+    older_tx = Transaction(
+        id=uuid.uuid4(),
+        user_id=user1.id,
+        amount=50.0,
+        transaction_type=TransactionType.DEPOSIT,
+        status=TransactionStatus.PENDING,
+        description="Older regular deposit",
+        crypto_network="TRON_TRC20",
+        crypto_address="T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+        crypto_coin="USDT",
+        created_at=utc_now() - timedelta(hours=2),
+    )
+    newer_tx = Transaction(
+        id=uuid.uuid4(),
+        user_id=user2.id,
+        amount=120.0,
+        transaction_type=TransactionType.DEPOSIT,
+        status=TransactionStatus.PENDING,
+        description="Copy trading commission deposit",
+        metadata_payload={
+            "type": "COPY_TRADING_COMMISSION",
+            "trader_name": "ApexAlpha",
+            "held_released_equity": 600.0,
+            "copy_id": str(uuid.uuid4()),
+        },
+        crypto_network="ETHEREUM_ERC20",
+        crypto_address="0x71C871A67DD91448b13689408b021319AcC003E9",
+        crypto_coin="ETH",
+        payment_confirmed_by_user=True,
+        payment_confirmed_at=utc_now(),
+        created_at=utc_now(),
+    )
+    db_session.add_all([older_tx, newer_tx])
+    db_session.commit()
+
+    dashboard = get_admin_dashboard_summary(session=db_session, current_user=admin)
+    pending = dashboard.pending_deposits
+
+    assert len(pending) >= 2
+    # Verify newest-first ordering
+    newer_idx = next(i for i, d in enumerate(pending) if d.id == newer_tx.id)
+    older_idx = next(i for i, d in enumerate(pending) if d.id == older_tx.id)
+    assert newer_idx < older_idx, "Newer deposit must be listed before older deposit"
+
+    # Verify extended fields on commission deposit
+    dep0 = pending[newer_idx]
+    assert dep0.full_name == "Bob Trader"
+    assert dep0.email == "user2@example.com"
+    assert dep0.amount == 120.0
+    assert dep0.payment_confirmed_by_user is True
+    assert dep0.payment_confirmed_at is not None
+    assert dep0.description == "Copy trading commission deposit"
+    assert dep0.metadata_payload is not None
+    assert dep0.metadata_payload["type"] == "COPY_TRADING_COMMISSION"
+    assert dep0.metadata_payload["trader_name"] == "ApexAlpha"
+    assert dep0.metadata_payload["held_released_equity"] == 600.0
+
+    # Verify extended fields on regular older deposit
+    dep1 = pending[older_idx]
+    assert dep1.full_name == "Alice User"
+    assert dep1.email == "user1@example.com"
+    assert dep1.amount == 50.0
+    assert dep1.payment_confirmed_by_user is False
+    assert dep1.description == "Older regular deposit"
+
+
 if __name__ == "__main__":
     import asyncio
     engine = create_engine(
@@ -537,6 +628,11 @@ if __name__ == "__main__":
     with Session(engine) as s:
         print("Running test_commission_and_ordinary_deposits_share_identical_address_resolution...")
         asyncio.run(test_commission_and_ordinary_deposits_share_identical_address_resolution(s))
+        print("✓ Passed!")
+
+    with Session(engine) as s:
+        print("Running test_admin_pending_deposits_order_and_commission_metadata...")
+        test_admin_pending_deposits_order_and_commission_metadata(s)
         print("✓ Passed!")
 
     print("\nAll Copy Trading commission accounting and settlement tests passed successfully!")
