@@ -1,6 +1,6 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import {
     Box,
@@ -44,6 +44,7 @@ import { useDashboardStore } from "@/stores/dashboard-store";
 import { formatCurrencyByPreference } from "@/utils/currency";
 import { DASHBOARD_GRID_SPACING } from "@/constants/layout";
 import { PendingDepositsBanner } from "@/components/dashboard/pending-deposits-banner";
+import { cryptoKeys } from "@/services/crypto";
 import { PendingApprovalBanner } from "@/components/dashboard/pending-approval-banner";
 import TradingViewTickerTape from "@/components/widgets/tradingview-ticker-tape";
 import { RoiCalculationsService } from "@/api/services/RoiCalculationsService";
@@ -51,6 +52,7 @@ import { RoiCalculationsService } from "@/api/services/RoiCalculationsService";
 export const UserDashboard = ({ children }: { children?: ReactNode }) => {
     const { user, logout, isAdmin } = useAuth();
     const userId = user?.id;
+    const queryClient = useQueryClient();
     const { pathname } = useLocation();
     const normalizedPathname =
         pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
@@ -107,12 +109,38 @@ export const UserDashboard = ({ children }: { children?: ReactNode }) => {
     });
 
     // Poll for user data updates (balances) while on dashboard
-    useQuery({
+    const currentUserQuery = useQuery({
         queryKey: ["currentUser"],
         queryFn: () => UsersService.usersReadUserMe(),
         enabled: isRootDashboard,
         refetchInterval: 15000, // Poll every 15s
     });
+
+    const prevBalanceRef = useRef<number | undefined>(currentUserQuery.data?.balance);
+    const prevTxCountRef = useRef<number | undefined>(transactionsQuery.data?.count);
+
+    useEffect(() => {
+        const currentBalance = currentUserQuery.data?.balance;
+        const currentTxCount = transactionsQuery.data?.count;
+
+        const balanceChanged =
+            prevBalanceRef.current !== undefined &&
+            currentBalance !== undefined &&
+            prevBalanceRef.current !== currentBalance;
+
+        const txCountChanged =
+            prevTxCountRef.current !== undefined &&
+            currentTxCount !== undefined &&
+            prevTxCountRef.current !== currentTxCount;
+
+        if (balanceChanged || txCountChanged) {
+            queryClient.invalidateQueries({ queryKey: cryptoKeys.pendingDeposits() });
+            queryClient.invalidateQueries({ queryKey: ["account-summary"] });
+        }
+
+        prevBalanceRef.current = currentBalance;
+        prevTxCountRef.current = currentTxCount;
+    }, [currentUserQuery.data?.balance, transactionsQuery.data?.count, queryClient]);
 
     // Market prices temporarily disabled (service not present)
     const marketDataQuery = { isLoading: false } as const;

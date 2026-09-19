@@ -1,7 +1,7 @@
 import uuid
 from datetime import timedelta
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.pool import StaticPool
 
@@ -26,6 +26,7 @@ from app.api.routes.crypto_deposits import (
     generate_deposit_address,
     GenerateAddressRequest,
     DEMO_ADDRESSES,
+    get_pending_deposits,
 )
 from app.services.transactions import finalize_deposit_transaction
 
@@ -596,6 +597,87 @@ def test_admin_pending_deposits_order_and_commission_metadata(db_session: Sessio
     assert dep1.description == "Older regular deposit"
 
 
+def test_pending_deposits_excludes_approved_and_sets_cache_headers(db_session: Session):
+    """Verify get_pending_deposits returns only PENDING deposits, excludes COMPLETED
+    deposits upon admin approval, and attaches anti-caching HTTP headers.
+    """
+    user = User(
+        id=uuid.uuid4(),
+        email="pendingtest@example.com",
+        hashed_password="hash",
+        wallet_balance=100.0,
+        balance=100.0,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    # Create 3 deposit transactions: 2 pending, 1 withdrawal (non-deposit)
+    tx_btc = Transaction(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        amount=100.0,
+        transaction_type=TransactionType.DEPOSIT,
+        status=TransactionStatus.PENDING,
+        description="BTC Deposit",
+        created_at=utc_now() - timedelta(minutes=10),
+    )
+    tx_usdt = Transaction(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        amount=250.0,
+        transaction_type=TransactionType.DEPOSIT,
+        status=TransactionStatus.PENDING,
+        description="USDT Deposit",
+        created_at=utc_now() - timedelta(minutes=5),
+    )
+    tx_withdraw = Transaction(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        amount=50.0,
+        transaction_type=TransactionType.WITHDRAWAL,
+        status=TransactionStatus.PENDING,
+        description="Withdrawal",
+        created_at=utc_now() - timedelta(minutes=2),
+    )
+    db_session.add(tx_btc)
+    db_session.add(tx_usdt)
+    db_session.add(tx_withdraw)
+    db_session.commit()
+
+    # Step 1: Initial query when 2 deposits are pending
+    response = Response()
+    pending = get_pending_deposits(session=db_session, current_user=user, response=response)
+
+    assert response.headers.get("Cache-Control") == "no-cache, no-store, max-age=0, must-revalidate"
+    assert response.headers.get("Pragma") == "no-cache"
+    assert response.headers.get("Expires") == "0"
+
+    assert len(pending) == 2
+    pending_ids = {t.id for t in pending}
+    assert tx_btc.id in pending_ids
+    assert tx_usdt.id in pending_ids
+    assert tx_withdraw.id not in pending_ids
+
+    # Step 2: Admin approves tx_btc -> status becomes COMPLETED
+    tx_btc.status = TransactionStatus.COMPLETED
+    db_session.add(tx_btc)
+    db_session.commit()
+
+    response2 = Response()
+    pending_after_first_approval = get_pending_deposits(session=db_session, current_user=user, response=response2)
+    assert len(pending_after_first_approval) == 1
+    assert pending_after_first_approval[0].id == tx_usdt.id
+
+    # Step 3: Admin approves tx_usdt -> status becomes COMPLETED
+    tx_usdt.status = TransactionStatus.COMPLETED
+    db_session.add(tx_usdt)
+    db_session.commit()
+
+    response3 = Response()
+    pending_after_second_approval = get_pending_deposits(session=db_session, current_user=user, response=response3)
+    assert len(pending_after_second_approval) == 0
+
+
 if __name__ == "__main__":
     import asyncio
     engine = create_engine(
@@ -633,6 +715,11 @@ if __name__ == "__main__":
     with Session(engine) as s:
         print("Running test_admin_pending_deposits_order_and_commission_metadata...")
         test_admin_pending_deposits_order_and_commission_metadata(s)
+        print("✓ Passed!")
+
+    with Session(engine) as s:
+        print("Running test_pending_deposits_excludes_approved_and_sets_cache_headers...")
+        test_pending_deposits_excludes_approved_and_sets_cache_headers(s)
         print("✓ Passed!")
 
     print("\nAll Copy Trading commission accounting and settlement tests passed successfully!")

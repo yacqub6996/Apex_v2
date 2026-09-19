@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlmodel import select, desc
 
@@ -350,8 +350,13 @@ def confirm_payment_sent(
 def get_pending_deposits(
     session: SessionDep,
     current_user: CurrentUser,
+    response: Response,
 ) -> Any:
-    """Get user's pending deposit transactions"""
+    """Get user's pending deposit transactions with authoritative fresh cache headers"""
+    response.headers["Cache-Control"] = "no-cache, no-store, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     statement = select(Transaction).where(
         Transaction.user_id == current_user.id,
         Transaction.transaction_type == TransactionType.DEPOSIT,

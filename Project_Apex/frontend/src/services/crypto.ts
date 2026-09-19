@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query'
 import { CryptoService } from '@/api/services/CryptoService'
+import { useAuth } from '@/providers/auth-provider'
 import type { NetworkInfo, CryptoRates, GenerateAddressRequest, GenerateAddressResponse, ConfirmPaymentRequest, TransactionPublic } from '@/api'
 
 // Query keys
@@ -12,7 +13,8 @@ export const cryptoKeys = {
   all: ['crypto'] as const,
   networks: () => [...cryptoKeys.all, 'networks'] as const,
   rates: () => [...cryptoKeys.all, 'rates'] as const,
-  pendingDeposits: () => [...cryptoKeys.all, 'pending-deposits'] as const,
+  pendingDeposits: (userId?: string) =>
+    [...cryptoKeys.all, 'pending-deposits', ...(userId ? [userId] : [])] as const,
 }
 
 /**
@@ -41,11 +43,21 @@ export function useCryptoRates(): UseQueryResult<CryptoRates, Error> {
 /**
  * Get pending deposits for current user
  */
-export function usePendingDeposits(): UseQueryResult<TransactionPublic[], Error> {
+export function usePendingDeposits(options?: {
+  enabled?: boolean
+}): UseQueryResult<TransactionPublic[], Error> {
+  const { user } = useAuth()
+  const userId = user?.id
+
   return useQuery({
-    queryKey: cryptoKeys.pendingDeposits(),
+    queryKey: cryptoKeys.pendingDeposits(userId),
     queryFn: () => CryptoService.cryptoGetPendingDeposits(),
-    refetchInterval: 15 * 1000, // Refetch every 15 seconds
+    enabled: options?.enabled !== undefined ? options.enabled : Boolean(userId),
+    staleTime: 0,
+    refetchInterval: 10 * 1000, // Refetch every 10 seconds
+    refetchIntervalInBackground: true, // Reconcile even if tab was backgrounded while admin approved
+    refetchOnWindowFocus: true, // Immediate reconcile when returning to tab
+    refetchOnMount: 'always', // Fresh check whenever component mounts
   })
 }
 

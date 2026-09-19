@@ -148,7 +148,10 @@ export const CopyTrading = () => {
   };
 
   const pendingDepositsQuery = usePendingDeposits();
-  const pendingDeposits = pendingDepositsQuery.data ?? [];
+  const rawPendingDeposits = pendingDepositsQuery.data ?? [];
+  const pendingDeposits = Array.isArray(rawPendingDeposits)
+    ? rawPendingDeposits.filter((d) => !d.status || d.status.toUpperCase() === "PENDING")
+    : [];
 
   const copiedTradersQuery = useQuery<CopiedTraderSummary[]>({
     queryKey: ["copied-traders"],

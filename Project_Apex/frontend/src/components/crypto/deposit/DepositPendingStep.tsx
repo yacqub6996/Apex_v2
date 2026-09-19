@@ -40,7 +40,10 @@ export const DepositPendingStep: React.FC<DepositPendingStepProps> = ({
   commissionAmount,
   traderName,
 }) => {
-  const { data: pendingDeposits, isLoading } = usePendingDeposits()
+  const { data: rawPendingDeposits, isLoading } = usePendingDeposits()
+  const pendingDeposits = Array.isArray(rawPendingDeposits)
+    ? rawPendingDeposits.filter((d) => !d.status || d.status.toUpperCase() === 'PENDING')
+    : []
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
