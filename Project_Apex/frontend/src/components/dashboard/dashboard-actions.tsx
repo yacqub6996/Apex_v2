@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Box, Button } from "@mui/material";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import { DepositRequest } from "@/components/dashboard/deposit-request";
+import { DepositModal } from "@/components/crypto/deposit/DepositModal";
 import { WithdrawalModal } from "@/components/crypto/withdrawal/WithdrawalModal";
 import { toast } from "react-toastify";
 
@@ -14,16 +13,12 @@ import { toast } from "react-toastify";
  * allowing users to deposit funds into or withdraw funds from the platform.
  */
 export const DashboardActions = () => {
-    const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+    const [depositModalOpen, setDepositModalOpen] = useState(false);
     const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
 
     const handleDepositSuccess = () => {
-        toast.success("Deposit request submitted successfully. Awaiting admin approval.");
-        setDepositDialogOpen(false);
-    };
-
-    const handleDepositError = (error: Error) => {
-        toast.error(error.message || "Failed to submit deposit request");
+        toast.success("Deposit submitted successfully.");
+        setDepositModalOpen(false);
     };
 
     const handleWithdrawSuccess = () => {
@@ -36,7 +31,7 @@ export const DashboardActions = () => {
                 variant="contained"
                 size="small"
                 startIcon={<ArrowDownwardIcon />}
-                onClick={() => setDepositDialogOpen(true)}
+                onClick={() => setDepositModalOpen(true)}
                 sx={{
                     textTransform: "none",
                     fontWeight: 600,
@@ -57,33 +52,12 @@ export const DashboardActions = () => {
                 Withdraw
             </Button>
 
-            {/* Deposit Dialog */}
-            <Dialog
-                open={depositDialogOpen}
-                onClose={() => setDepositDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        Deposit Funds
-                        <IconButton
-                            edge="end"
-                            onClick={() => setDepositDialogOpen(false)}
-                            aria-label="close"
-                            size="small"
-                        >
-                            <CloseIcon />
-                        </IconButton>
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <DepositRequest
-                        onSuccess={handleDepositSuccess}
-                        onError={handleDepositError}
-                    />
-                </DialogContent>
-            </Dialog>
+            {/* Deposit Modal */}
+            <DepositModal
+                open={depositModalOpen}
+                onClose={() => setDepositModalOpen(false)}
+                onConfirmSuccess={handleDepositSuccess}
+            />
 
             {/* Withdraw Modal */}
             <WithdrawalModal

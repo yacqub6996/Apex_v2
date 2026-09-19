@@ -164,7 +164,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
 
       {!isCommission && (
         <Typography variant="body2" color="text.secondary">
-          Enter the amount you want to deposit in USD. A $5.00 VAT fee will be added.
+          Enter the amount you want to deposit in USD. A $5.00 network fee will be added.
         </Typography>
       )}
 
@@ -286,7 +286,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                {isCommission ? 'Blockchain Network & Gas Fee:' : 'VAT Fee:'}
+                {isCommission ? 'Blockchain Network & Gas Fee:' : 'Network Fee:'}
               </Typography>
               <Typography variant="body2" fontWeight={600}>
                 ${vatAmount.toFixed(2)}

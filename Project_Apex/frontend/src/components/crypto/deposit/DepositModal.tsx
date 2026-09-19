@@ -16,8 +16,6 @@ import {
   Alert,
   Box,
   IconButton,
-  useMediaQuery,
-  useTheme,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -29,6 +27,8 @@ import { useDepositFlow } from '@/hooks/useDeposit'
 import { useAuth } from '@/providers/auth-provider'
 import { extractApiErrorMessage } from '@/utils/errors'
 import type { Asset, NetworkKey } from '@/types/crypto'
+import { ApexBottomSheet } from '@/components/ui/apex-bottom-sheet'
+import { useModalSuppression } from '@/stores/support-widget-store'
 
 interface DepositModalProps {
   open: boolean
@@ -56,9 +56,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   description,
   onConfirmSuccess,
 }) => {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const { user } = useAuth()
+  useModalSuppression(open)
   
   const [showKycWarning, setShowKycWarning] = useState(false)
   const [kycWarningAcknowledged, setKycWarningAcknowledged] = useState(false)
@@ -202,23 +201,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({
       )}
 
       {/* Main Deposit Dialog */}
-      <Dialog
+      <ApexBottomSheet
         open={open && !showKycWarning}
         onClose={handleRequestClose}
+        variant="fullscreen"
         maxWidth="md"
-        fullWidth
-        fullScreen={isMobile}
-        PaperProps={{
-          sx: {
-            borderRadius: isMobile ? 0 : 3,
-            height: isMobile ? '100dvh' : 'auto',
-            maxHeight: isMobile ? '100dvh' : '90vh',
-            m: isMobile ? 0 : 2,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          },
-        }}
       >
         <DialogTitle
           sx={{
@@ -427,7 +414,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
             </Button>
           )}
         </DialogActions>
-      </Dialog>
+      </ApexBottomSheet>
 
       {/* Confirmation Dialog for Dismissing Active Payment */}
       <Dialog

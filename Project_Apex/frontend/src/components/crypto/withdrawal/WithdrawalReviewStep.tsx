@@ -23,16 +23,18 @@ interface WithdrawalReviewStepProps {
     address: string
     memo?: string
   }
-  onConfirm: () => void
-  onBack: () => void
-  isSubmitting: boolean
+  onConfirm?: () => void
+  onBack?: () => void
+  isSubmitting?: boolean
+  showActions?: boolean
 }
 
 export const WithdrawalReviewStep: React.FC<WithdrawalReviewStepProps> = ({
   formData,
   onConfirm,
   onBack,
-  isSubmitting,
+  isSubmitting = false,
+  showActions = false,
 }) => {
   const { data: rates } = useCryptoRates()
   const { data: networks } = useNetworks()
@@ -169,25 +171,27 @@ export const WithdrawalReviewStep: React.FC<WithdrawalReviewStepProps> = ({
         </Typography>
       </Alert>
 
-      {/* Action Buttons */}
-      <Stack direction="row" spacing={2}>
-        <Button
-          onClick={onBack}
-          variant="outlined"
-          fullWidth
-          disabled={isSubmitting}
-        >
-          Back
-        </Button>
-        <Button
-          onClick={onConfirm}
-          variant="contained"
-          fullWidth
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Submitting...' : 'Confirm Withdrawal'}
-        </Button>
-      </Stack>
+      {/* Action Buttons (deprecated inside body; managed by StickyActionFooter in WithdrawalModal) */}
+      {showActions && (
+        <Stack direction="row" spacing={2}>
+          <Button
+            onClick={onBack}
+            variant="outlined"
+            fullWidth
+            disabled={isSubmitting}
+          >
+            Back
+          </Button>
+          <Button
+            onClick={onConfirm}
+            variant="contained"
+            fullWidth
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : 'Confirm Withdrawal'}
+          </Button>
+        </Stack>
+      )}
     </Stack>
   )
 }

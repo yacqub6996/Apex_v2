@@ -135,8 +135,8 @@ export const FloatingSupportWidget = () => {
     }
   };
 
-  // Don't render for unauthenticated users
-  if (!isAuthenticated || !token) {
+  // Don't render for unauthenticated users or when modals are active
+  if (!isAuthenticated || !token || widgetStore.isSuppressed) {
     return null;
   }
 

@@ -7,7 +7,7 @@
  * - User-scoped localStorage keys for memory state
  */
 
-import { useSyncExternalStore, useMemo } from 'react';
+import { useSyncExternalStore, useMemo, useEffect } from 'react';
 
 const WIDGET_STATE_KEY = 'apex_support_widget_state';
 const THREAD_ID_KEY_PREFIX = 'apex_support_thread_';
@@ -18,15 +18,18 @@ interface WidgetState {
 
 interface SupportWidgetStore {
   isOpen: boolean;
+  isSuppressed: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   getThreadId: (userId: string) => string | null;
   setThreadId: (userId: string, threadId: string) => void;
   clearThreadId: (userId: string) => void;
+  registerModalOpen: () => () => void;
 }
 
 class SupportWidgetStoreImpl {
   private isOpen = false;
+  private activeModalCount = 0;
   private listeners: Set<() => void> = new Set();
 
   constructor() {
@@ -66,6 +69,23 @@ class SupportWidgetStoreImpl {
 
   getSnapshot = (): boolean => {
     return this.isOpen;
+  };
+
+  getSuppressedSnapshot = (): boolean => {
+    return this.activeModalCount > 0;
+  };
+
+  registerModalOpen = (): (() => void) => {
+    this.activeModalCount++;
+    this.notifyListeners();
+    let cleaned = false;
+    return () => {
+      if (!cleaned) {
+        cleaned = true;
+        this.activeModalCount = Math.max(0, this.activeModalCount - 1);
+        this.notifyListeners();
+      }
+    };
   };
 
   subscribe = (listener: () => void): (() => void) => {
@@ -141,19 +161,37 @@ export const useSupportWidgetStore = (): SupportWidgetStore => {
     supportWidgetStore.getSnapshot,
     supportWidgetStore.getSnapshot
   );
+  const isSuppressed = useSyncExternalStore(
+    supportWidgetStore.subscribe,
+    supportWidgetStore.getSuppressedSnapshot,
+    supportWidgetStore.getSuppressedSnapshot
+  );
 
   // Memoize the returned object to prevent unnecessary re-renders
   return useMemo(
     () => ({
       isOpen,
+      isSuppressed,
       setOpen: supportWidgetStore.setOpen,
       toggle: supportWidgetStore.toggle,
       getThreadId: (userId: string) => supportWidgetStore.getThreadId(userId),
       setThreadId: (userId: string, threadId: string) => supportWidgetStore.setThreadId(userId, threadId),
       clearThreadId: (userId: string) => supportWidgetStore.clearThreadId(userId),
+      registerModalOpen: supportWidgetStore.registerModalOpen,
     }),
-    [isOpen]
+    [isOpen, isSuppressed]
   );
+};
+
+/**
+ * Convenience hook to suppress the floating support widget while a modal or overlay is active
+ */
+export const useModalSuppression = (active: boolean = true) => {
+  useEffect(() => {
+    if (!active) return;
+    const cleanup = supportWidgetStore.registerModalOpen();
+    return cleanup;
+  }, [active]);
 };
 
 // Export for direct access if needed

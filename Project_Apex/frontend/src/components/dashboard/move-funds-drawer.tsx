@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
-  Button,
-  Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
@@ -18,6 +15,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ApexBottomSheet } from '@/components/ui/apex-bottom-sheet';
+import { StickyActionFooter } from '@/components/ui/sticky-action-footer';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/providers/auth-provider';
 import { CopyTradingService } from '@/api/services/CopyTradingService';
@@ -204,9 +203,14 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Move Funds</DialogTitle>
-      <DialogContent>
+    <ApexBottomSheet
+      open={open}
+      onClose={onClose}
+      variant="bottom-sheet"
+      maxWidth="sm"
+    >
+      <DialogTitle sx={{ flexShrink: 0, p: { xs: 2, sm: 3 }, pb: { xs: 1.5, sm: 2 } }}>Move Funds</DialogTitle>
+      <DialogContent sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 3, sm: 4 }, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <Stack spacing={2}>
           {isDisabledByKyc && (
             <Alert severity="warning">
@@ -264,12 +268,19 @@ export function MoveFundsDrawer({ open, onClose, initialRoute }: {
           </Box>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={submit} disabled={isDisabledByKyc || mutation.isPending} aria-busy={mutation.isPending}>
-          {mutation.isPending ? 'Moving...' : 'Move Funds'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      <StickyActionFooter
+        secondaryAction={{
+          label: 'Cancel',
+          onClick: onClose,
+          disabled: mutation.isPending,
+        }}
+        primaryAction={{
+          label: mutation.isPending ? 'Moving...' : 'Move Funds',
+          onClick: submit,
+          disabled: isDisabledByKyc || mutation.isPending,
+          loading: mutation.isPending,
+        }}
+      />
+    </ApexBottomSheet>
   );
 }

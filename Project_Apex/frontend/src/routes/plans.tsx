@@ -30,7 +30,7 @@ import { LongTermService } from "@/api/services/LongTermService";
 import { RoiCalculationsService } from "@/api/services/RoiCalculationsService";
 import { LongTermAllocation } from "@/components/dashboard/long-term-allocation";
 import { MoveFundsDrawer } from "@/components/dashboard/move-funds-drawer";
-import { DepositRequest } from "@/components/dashboard/deposit-request";
+import { DepositModal } from "@/components/crypto/deposit/DepositModal";
 import { RouteGuard } from "@/components/auth/route-guard";
 import { MaterialDashboardLayout, type MaterialDashboardNavItem } from "@/components/layouts/material-dashboard";
 import {
@@ -1333,43 +1333,18 @@ function LongTermPlansPage() {
                     </DialogActions>
                 </Dialog>
 
-                {/* Deposit Dialog */}
-                <Dialog
+                {/* Deposit Modal */}
+                <DepositModal
                     open={depositDialogOpen}
                     onClose={() => setDepositDialogOpen(false)}
-                    maxWidth="md"
-                    fullWidth
-                >
-                    <DialogTitle>Deposit Funds to Main Wallet</DialogTitle>
-                    <DialogContent dividers sx={{ bgcolor: "background.default" }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Submit a deposit request. Once approved by an admin, funds will appear in your
-                            available balance and can be allocated to long-term plans.
-                        </Typography>
-                        <DepositRequest
-                            onSuccess={() => {
-                                setDepositDialogOpen(false);
-                                setPageNotice({
-                                    severity: "success",
-                                    message: "Deposit request submitted. Check your account history for updates.",
-                                });
-                            }}
-                            onError={(error) => {
-                                setPageNotice({
-                                    severity: "error",
-                                    message: error?.message ?? "Failed to submit deposit request.",
-                                });
-                            }}
-                        />
-                    </DialogContent>
-                    <DialogActions>
-                        <Button
-                            onClick={() => setDepositDialogOpen(false)}
-                        >
-                            Close
-                        </Button>
-                    </DialogActions>
-                </Dialog>
+                    onConfirmSuccess={() => {
+                        setDepositDialogOpen(false);
+                        setPageNotice({
+                            severity: "success",
+                            message: "Deposit submitted successfully. Check your account history for updates.",
+                        });
+                    }}
+                />
 
                 {/* Wallet Withdrawal Dialog */}
                 <Dialog

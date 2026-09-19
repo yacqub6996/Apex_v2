@@ -5,11 +5,8 @@
 
 import React from 'react'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
   Stepper,
   Step,
   StepLabel,
@@ -18,11 +15,10 @@ import {
   Chip,
   Typography,
   IconButton,
-  Stack,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import { ApexBottomSheet } from '@/components/ui/apex-bottom-sheet'
+import { StickyActionFooter } from '@/components/ui/sticky-action-footer'
 import { WithdrawalInputStep } from './WithdrawalInputStep'
 import { WithdrawalReviewStep } from './WithdrawalReviewStep'
 import { WithdrawalPendingStep } from './WithdrawalPendingStep'
@@ -46,8 +42,6 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   onSuccess,
   walletType = 'main' 
 }) => {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const { user } = useAuth()
 
   const {
@@ -94,24 +88,11 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   const kycApproved = user?.kyc_status === 'APPROVED'
 
   return (
-    <Dialog
+    <ApexBottomSheet
       open={open}
       onClose={handleClose}
+      variant="fullscreen"
       maxWidth="md"
-      fullWidth
-      fullScreen={isMobile}
-      PaperProps={{
-        sx: {
-          borderRadius: isMobile ? 0 : 3,
-          height: isMobile ? '100dvh' : 'auto',
-          minHeight: isMobile ? '100dvh' : '600px',
-          maxHeight: isMobile ? '100dvh' : '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          m: isMobile ? 0 : 2,
-        },
-      }}
     >
       <DialogTitle sx={{ flexShrink: 0, p: { xs: 2, sm: 3 }, pb: { xs: 1.5, sm: 2 } }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -149,6 +130,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         dividers
         sx={{
           p: { xs: 2, sm: 3 },
+          pb: { xs: 3, sm: 4 },
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
@@ -199,42 +181,46 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         )}
       </DialogContent>
 
-      {step !== 'review' && (
-        <DialogActions sx={{ p: { xs: 1.5, sm: 2 }, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
-          {step === 'input' && (
-            <Stack
-              direction={{ xs: 'column-reverse', sm: 'row' }}
-              spacing={1.5}
-              sx={{ width: '100%', justifyContent: 'flex-end' }}
-            >
-              <Button
-                onClick={handleClose}
-                variant="outlined"
-                color="inherit"
-                fullWidth={isMobile}
-                sx={{ minHeight: 44 }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form="withdrawal-form"
-                variant="contained"
-                fullWidth={isMobile}
-                sx={{ minHeight: 44 }}
-              >
-                Review Withdrawal
-              </Button>
-            </Stack>
-          )}
-
-          {step === 'pending' && (
-            <Button onClick={handleClose} variant="contained" fullWidth sx={{ minHeight: 44 }}>
-              Done
-            </Button>
-          )}
-        </DialogActions>
+      {step === 'input' && (
+        <StickyActionFooter
+          secondaryAction={{
+            label: 'Cancel',
+            onClick: handleClose,
+            disabled: isSubmitting,
+          }}
+          primaryAction={{
+            label: 'Review Withdrawal',
+            type: 'submit',
+            form: 'withdrawal-form',
+            disabled: !kycApproved || isSubmitting,
+          }}
+        />
       )}
-    </Dialog>
+
+      {step === 'review' && (
+        <StickyActionFooter
+          secondaryAction={{
+            label: 'Back',
+            onClick: handleBack,
+            disabled: isSubmitting,
+          }}
+          primaryAction={{
+            label: isSubmitting ? 'Submitting...' : 'Confirm Withdrawal',
+            onClick: handleConfirmWithdrawal,
+            disabled: isSubmitting,
+            loading: isSubmitting,
+          }}
+        />
+      )}
+
+      {step === 'pending' && (
+        <StickyActionFooter
+          primaryAction={{
+            label: 'Done',
+            onClick: handleClose,
+          }}
+        />
+      )}
+    </ApexBottomSheet>
   )
 }

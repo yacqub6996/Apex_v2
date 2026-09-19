@@ -268,7 +268,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {isCommission ? 'Blockchain Network Fee:' : 'VAT Fee:'}
+                  {isCommission ? 'Blockchain Network Fee:' : 'Network Fee:'}
                 </Typography>
                 <Typography variant="caption" fontWeight={600}>+${(session.vatFeeUsd || 5).toFixed(2)}</Typography>
               </Box>
