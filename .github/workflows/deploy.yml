@@ -32,25 +32,43 @@ jobs:
 
       - name: Deploy Backend via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          COMMISSION_BTC_ADDR: ${{ secrets.COPY_TRADING_COMMISSION_BTC_ADDRESS }}
         with:
           host: ${{ secrets.HOST_IP }}
           username: root
           password: ${{ secrets.HOST_PASSWORD }}
+          envs: COMMISSION_BTC_ADDR
           script: |
             set -e
             # 1. Go to the manual folder we created on the VPS
             cd /home/apex-deployment
-            
-            # 2. Pull the image we just built
+
+            # 2. Update COPY_TRADING_COMMISSION_BTC_ADDRESS in .env
+            COMMISSION_BTC_ADDR="$(echo "$COMMISSION_BTC_ADDR" | tr -d '[:space:]')"
+            if [ -n "$COMMISSION_BTC_ADDR" ]; then
+              if grep -q "^COPY_TRADING_COMMISSION_BTC_ADDRESS=" .env 2>/dev/null; then
+                sed -i "s|^COPY_TRADING_COMMISSION_BTC_ADDRESS=.*|COPY_TRADING_COMMISSION_BTC_ADDRESS=${COMMISSION_BTC_ADDR}|" .env
+              else
+                [ -n "$(tail -c1 .env 2>/dev/null)" ] && echo "" >> .env
+                echo "COPY_TRADING_COMMISSION_BTC_ADDRESS=${COMMISSION_BTC_ADDR}" >> .env
+              fi
+              chmod 600 .env
+            fi
+
+            # 3. Pull the image we just built
             docker compose pull backend
-            
-            # 3. Run migrations and db initialization safely before restarting service
+
+            # 4. Run migrations and db initialization safely before restarting service
             docker compose run --rm backend bash scripts/prestart.sh
-            
-            # 4. Restart the backend
-            docker compose up -d backend
-            
-            # 5. Clean up space
+
+            # 5. Restart the backend
+            docker compose up -d --force-recreate backend
+
+            # 6. Verify commission configuration is loaded in the backend
+            docker compose exec -e EXPECTED_ADDR="$COMMISSION_BTC_ADDR" -T backend python -c "import os; from app.core.config import settings; assert settings.COPY_TRADING_COMMISSION_BTC_ADDRESS == os.environ.get('EXPECTED_ADDR'), 'Address mismatch'; print('Commission BTC address verified successfully')"
+
+            # 7. Clean up space
             docker image prune -f
 
   deploy-frontend:
