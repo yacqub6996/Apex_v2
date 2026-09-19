@@ -42,6 +42,7 @@ export type { CopyTradingROIResponse } from "./models/CopyTradingROIResponse";
 export type { CopyTradingStartRequest } from "./models/CopyTradingStartRequest";
 export type { CopyTradingStartResponse } from "./models/CopyTradingStartResponse";
 export type { CopyTradingSummaryResponse } from "./models/CopyTradingSummaryResponse";
+export type { CopyTradingStopPreviewResponse } from "./models/CopyTradingStopPreviewResponse";
 export type { CopyTradingUpdateResponse } from "./models/CopyTradingUpdateResponse";
 export type { CopyTradingWithdrawalRequest } from "./models/CopyTradingWithdrawalRequest";
 export type { CopyTradingWithdrawalResponse } from "./models/CopyTradingWithdrawalResponse";

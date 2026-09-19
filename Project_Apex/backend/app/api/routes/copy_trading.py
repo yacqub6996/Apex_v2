@@ -243,6 +243,61 @@ class CopyTradingSummaryResponse(SQLModel):
     total_commission_due: float = 0.0
 
 
+class CopyTradingStopPreviewResponse(SQLModel):
+    copy_id: uuid.UUID
+    trader_name: str
+    allocation: float
+    session_profit: float
+    copy_fee_percentage: float
+    commission_due: float
+    release_amount: float
+    held_released_equity: float
+    immediate_release_amount: float
+    equity_released: bool
+    requires_commission_deposit: bool
+    notice: str
+
+    @computed_field(return_type=uuid.UUID, alias="copyId")
+    def copy_id_camel(self) -> uuid.UUID:
+        return self.copy_id
+
+    @computed_field(return_type=str, alias="traderName")
+    def trader_name_camel(self) -> str:
+        return self.trader_name
+
+    @computed_field(return_type=float, alias="sessionProfit")
+    def session_profit_camel(self) -> float:
+        return self.session_profit
+
+    @computed_field(return_type=float, alias="copyFeePercentage")
+    def copy_fee_percentage_camel(self) -> float:
+        return self.copy_fee_percentage
+
+    @computed_field(return_type=float, alias="commissionDue")
+    def commission_due_camel(self) -> float:
+        return self.commission_due
+
+    @computed_field(return_type=float, alias="releaseAmount")
+    def release_amount_camel(self) -> float:
+        return self.release_amount
+
+    @computed_field(return_type=float, alias="heldReleasedEquity")
+    def held_released_equity_camel(self) -> float:
+        return self.held_released_equity
+
+    @computed_field(return_type=float, alias="immediateReleaseAmount")
+    def immediate_release_amount_camel(self) -> float:
+        return self.immediate_release_amount
+
+    @computed_field(return_type=bool, alias="equityReleased")
+    def equity_released_camel(self) -> bool:
+        return self.equity_released
+
+    @computed_field(return_type=bool, alias="requiresCommissionDeposit")
+    def requires_commission_deposit_camel(self) -> bool:
+        return self.requires_commission_deposit
+
+
 class FundWalletRequest(SQLModel):
     amount: float
 
@@ -1029,6 +1084,125 @@ def pause_copy_relationship(
     )
 
 
+def _calculate_stop_settlement(
+    session: SessionDep | Session, copy: UserTraderCopy
+) -> dict[str, Any]:
+    """Authoritative financial settlement calculation for stopping a copy relationship.
+
+    Reused across preview and stop mutation to ensure 100% calculation parity.
+    """
+    session.refresh(copy, attribute_names=["user", "trader_profile"])
+    if not copy.user:
+        raise HTTPException(
+            status_code=404, detail="User not found for copy relationship"
+        )
+    if copy.trader_profile:
+        session.refresh(copy.trader_profile, attribute_names=["user"])
+
+    # 1. Calculate session profit
+    profit_stmt = (
+        select(func.coalesce(func.sum(ExecutionEvent.amount), 0.0))
+        .where(ExecutionEvent.user_id == copy.user.id)
+        .where(ExecutionEvent.trader_profile_id == copy.trader_profile_id)
+        .where(ExecutionEvent.event_type == ExecutionEventType.FOLLOWER_PROFIT)
+        .where(ExecutionEvent.created_at >= copy.copy_started_at)
+    )
+    session_profit = round(float(session.exec(profit_stmt).one() or 0.0), 2)
+    copy_fee_pct = (
+        float(copy.trader_profile.copy_fee_percentage or 0.0)
+        if copy.trader_profile
+        else 0.0
+    )
+
+    if session_profit > 0 and copy_fee_pct > 0:
+        commission_due = round(session_profit * (copy_fee_pct / 100.0), 2)
+    else:
+        commission_due = 0.0
+
+    # 2. Duplicate protection check
+    if commission_due > 0:
+        existing_txs = session.exec(
+            select(Transaction).where(
+                Transaction.user_id == copy.user.id,
+                Transaction.transaction_type == TransactionType.DEPOSIT,
+            )
+        ).all()
+        for tx in existing_txs:
+            if tx.metadata_payload and str(tx.metadata_payload.get("copy_id")) == str(
+                copy.id
+            ):
+                if tx.status in (
+                    TransactionStatus.COMPLETED,
+                    TransactionStatus.PENDING,
+                ):
+                    commission_due = 0.0
+                    break
+            elif (
+                tx.description
+                and str(copy.id) in tx.description
+                and "commission" in tx.description.lower()
+            ):
+                if tx.status in (
+                    TransactionStatus.COMPLETED,
+                    TransactionStatus.PENDING,
+                ):
+                    commission_due = 0.0
+                    break
+
+    # 3. Compute proportionate equity to release
+    from sqlmodel import select as _select
+
+    active_copies = session.exec(
+        _select(UserTraderCopy).where(
+            UserTraderCopy.user_id == copy.user.id,
+            UserTraderCopy.copy_status != CopyStatus.STOPPED,
+        )
+    ).all()
+    total_alloc = sum(float(c.copy_amount or 0.0) for c in active_copies) or 0.0
+    total_equity = float(copy.user.copy_trading_balance or 0.0)
+
+    allocation = round(float(copy.copy_amount or 0.0), 2)
+    if total_alloc > 0 and total_equity > 0:
+        equity_per_dollar = total_equity / total_alloc
+        release_amount = round(allocation * equity_per_dollar, 2)
+    else:
+        release_amount = allocation
+
+    if commission_due > 0:
+        held_released_equity = release_amount
+        immediate_release_amount = 0.0
+        equity_released = False
+    else:
+        held_released_equity = 0.0
+        immediate_release_amount = release_amount
+        equity_released = True
+
+    trader_name = (
+        copy.trader_profile.display_name
+        if copy.trader_profile and copy.trader_profile.display_name
+        else (
+            copy.trader_profile.user.full_name
+            if copy.trader_profile
+            and copy.trader_profile.user
+            and copy.trader_profile.user.full_name
+            else "Trader"
+        )
+    )
+
+    return {
+        "copy_id": copy.id,
+        "trader_name": trader_name,
+        "allocation": allocation,
+        "session_profit": session_profit,
+        "copy_fee_percentage": copy_fee_pct,
+        "commission_due": commission_due,
+        "release_amount": release_amount,
+        "held_released_equity": held_released_equity,
+        "immediate_release_amount": immediate_release_amount,
+        "equity_released": equity_released,
+    }
+
+
 @router.post("/copied/{copy_id}/stop", response_model=CopyTradingUpdateResponse)
 def stop_copy_relationship(
     *,
@@ -1083,96 +1257,31 @@ def stop_copy_relationship(
         session.add(copy.user.copy_trading_wallet)
         session.flush()
 
-    # Calculate session profit and trader commission due
-    profit_stmt = (
-        select(func.coalesce(func.sum(ExecutionEvent.amount), 0.0))
-        .where(ExecutionEvent.user_id == copy.user.id)
-        .where(ExecutionEvent.trader_profile_id == copy.trader_profile_id)
-        .where(ExecutionEvent.event_type == ExecutionEventType.FOLLOWER_PROFIT)
-        .where(ExecutionEvent.created_at >= copy.copy_started_at)
-    )
-    session_profit = round(float(session.exec(profit_stmt).one() or 0.0), 2)
-    copy_fee_pct = (
-        float(copy.trader_profile.copy_fee_percentage or 0.0)
-        if copy.trader_profile
-        else 0.0
-    )
-
-    if session_profit > 0 and copy_fee_pct > 0:
-        commission_due = round(session_profit * (copy_fee_pct / 100.0), 2)
-    else:
-        commission_due = 0.0
-
-    # Duplicate protection check: if a commission deposit transaction already exists for this copy session
-    if commission_due > 0:
-        existing_txs = session.exec(
-            select(Transaction).where(
-                Transaction.user_id == copy.user.id,
-                Transaction.transaction_type == TransactionType.DEPOSIT,
-            )
-        ).all()
-        for tx in existing_txs:
-            if tx.metadata_payload and str(tx.metadata_payload.get("copy_id")) == str(
-                copy.id
-            ):
-                if tx.status in (
-                    TransactionStatus.COMPLETED,
-                    TransactionStatus.PENDING,
-                ):
-                    commission_due = 0.0
-                    break
-            elif (
-                tx.description
-                and str(copy.id) in tx.description
-                and "commission" in tx.description.lower()
-            ):
-                if tx.status in (
-                    TransactionStatus.COMPLETED,
-                    TransactionStatus.PENDING,
-                ):
-                    commission_due = 0.0
-                    break
-
-    # Compute proportionate equity to release for this copy
-    from sqlmodel import select as _select
-
-    active_copies = session.exec(
-        _select(UserTraderCopy).where(
-            UserTraderCopy.user_id == copy.user.id,
-            UserTraderCopy.copy_status != CopyStatus.STOPPED,
-        )
-    ).all()
-    total_alloc = sum(float(c.copy_amount or 0.0) for c in active_copies) or 0.0
-    total_equity = float(copy.user.copy_trading_balance or 0.0)
-
-    if total_alloc > 0 and total_equity > 0:
-        equity_per_dollar = total_equity / total_alloc
-        release_amount = round(float(copy.copy_amount or 0.0) * equity_per_dollar, 2)
-    else:
-        release_amount = round(float(copy.copy_amount or 0.0), 2)
+    settlement = _calculate_stop_settlement(session, copy)
+    session_profit = settlement["session_profit"]
+    copy_fee_pct = settlement["copy_fee_percentage"]
+    commission_due = settlement["commission_due"]
+    release_amount = settlement["release_amount"]
+    held_released_equity = settlement["held_released_equity"]
+    immediate_release_amount = settlement["immediate_release_amount"]
+    trader_name = settlement["trader_name"]
 
     # Liquidate allocated equity from active copy trading balance
+    total_equity = float(copy.user.copy_trading_balance or 0.0)
     copy.user.copy_trading_balance = max(0.0, round(total_equity - release_amount, 2))
 
     settings = dict(copy.copy_settings or {})
     settings["session_profit"] = session_profit
     settings["copy_fee_percentage"] = copy_fee_pct
+    settings["held_released_equity"] = held_released_equity
+    settings["commission_due"] = commission_due
+    settings["equity_released"] = settlement["equity_released"]
 
-    # Hold or release equity:
-    # If commission is due, equity is held until admin confirms separate commission payment.
-    # If no commission is due, equity is credited immediately to Copy Trading Wallet.
-    if commission_due > 0:
-        settings["held_released_equity"] = release_amount
-        settings["commission_due"] = commission_due
-        settings["equity_released"] = False
-    else:
+    if commission_due == 0:
         wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
         copy.user.copy_trading_wallet.balance = round(
             wallet_balance + release_amount, 2
         )
-        settings["held_released_equity"] = 0.0
-        settings["commission_due"] = 0.0
-        settings["equity_released"] = True
         session.add(copy.user.copy_trading_wallet)
 
     copy.copy_settings = settings
@@ -1193,18 +1302,6 @@ def stop_copy_relationship(
     # Return current Copy Trading Wallet balance as available_balance for client cache update
     session.refresh(copy.user, attribute_names=["copy_trading_wallet"])  # type: ignore[arg-type]
     available_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
-
-    trader_name = (
-        copy.trader_profile.display_name
-        if copy.trader_profile and copy.trader_profile.display_name
-        else (
-            copy.trader_profile.user.full_name
-            if copy.trader_profile
-            and copy.trader_profile.user
-            and copy.trader_profile.user.full_name
-            else "Trader"
-        )
-    )
 
     # Notify stop event
     try:
@@ -1229,6 +1326,66 @@ def stop_copy_relationship(
         copy_fee_percentage=copy_fee_pct,
         trader_name=trader_name,
         released_equity=release_amount,
+    )
+
+
+@router.get("/copied/{copy_id}/stop-preview", response_model=CopyTradingStopPreviewResponse)
+def get_copy_relationship_stop_preview(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    copy_id: uuid.UUID,
+) -> CopyTradingStopPreviewResponse:
+    """Return an authoritative pre-stop settlement preview for a copy relationship.
+
+    Reuses the exact same financial settlement rules as stop_copy_relationship without mutating state.
+    """
+    copy = _load_copy_relationship(session, current_user, copy_id)
+    if copy.copy_status == CopyStatus.STOPPED:
+        settings = dict(copy.copy_settings or {})
+        held_equity = float(settings.get("held_released_equity", 0.0) or 0.0)
+        comm_due = float(settings.get("commission_due", 0.0) or 0.0)
+        sess_profit = float(settings.get("session_profit", 0.0) or 0.0)
+        fee_pct = float(settings.get("copy_fee_percentage", 0.0) or 0.0)
+        trader_name = (
+            copy.trader_profile.display_name
+            if copy.trader_profile and copy.trader_profile.display_name
+            else "Trader"
+        )
+        return CopyTradingStopPreviewResponse(
+            copy_id=copy.id,
+            trader_name=trader_name,
+            allocation=float(copy.copy_amount or 0.0),
+            session_profit=sess_profit,
+            copy_fee_percentage=fee_pct,
+            commission_due=comm_due,
+            release_amount=held_equity,
+            held_released_equity=held_equity,
+            immediate_release_amount=0.0,
+            equity_released=bool(settings.get("equity_released", True)),
+            requires_commission_deposit=comm_due > 0,
+            notice="This copy relationship is already stopped.",
+        )
+
+    settlement = _calculate_stop_settlement(session, copy)
+
+    if settlement["commission_due"] > 0:
+        notice = (
+            f"A {settlement['copy_fee_percentage']:.0f}% performance commission (${settlement['commission_due']:.2f}) "
+            f"is due on session profits of ${settlement['session_profit']:.2f}. "
+            f"Upon stopping, your liquidated equity (${settlement['release_amount']:.2f}) will be held in escrow "
+            f"until the commission deposit is verified by an administrator."
+        )
+    else:
+        notice = (
+            f"No performance commission is due. Upon stopping, your full liquidated equity "
+            f"(${settlement['release_amount']:.2f}) will be immediately credited to your Copy Trading Wallet."
+        )
+
+    return CopyTradingStopPreviewResponse(
+        **settlement,
+        requires_commission_deposit=settlement["commission_due"] > 0,
+        notice=notice,
     )
 
 

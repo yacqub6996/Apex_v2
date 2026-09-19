@@ -13,7 +13,6 @@ import {
   Typography,
   Stack,
   Alert,
-  Button,
   FormHelperText,
   Chip,
 } from '@mui/material'
@@ -119,9 +118,6 @@ export const WithdrawalInputStep: React.FC<WithdrawalInputStepProps> = ({
   }
 
   const isValidAmount = usdAmount > 0
-  const isValidAddress = address.trim().length > 0
-  const isValidMemo = !requiresMemo || memo.trim().length > 0
-  const canSubmit = isValidAmount && isValidAddress && isValidMemo && !disabled
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
@@ -131,7 +127,7 @@ export const WithdrawalInputStep: React.FC<WithdrawalInputStepProps> = ({
                       'Main Wallet'
 
   return (
-    <Box component="form" onSubmit={handleSubmit}>
+    <Box component="form" id="withdrawal-form" onSubmit={handleSubmit}>
       <Stack spacing={3}>
         <Typography variant="body2" color="text.secondary">
           Enter the withdrawal details. Your funds will be sent to the specified address after admin verification.
@@ -280,17 +276,6 @@ export const WithdrawalInputStep: React.FC<WithdrawalInputStepProps> = ({
             Sending to the wrong address or network will result in permanent loss of funds.
           </Typography>
         </Alert>
-
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          variant="contained"
-          fullWidth
-          size="large"
-          disabled={!canSubmit}
-        >
-          Review Withdrawal
-        </Button>
       </Stack>
     </Box>
   )

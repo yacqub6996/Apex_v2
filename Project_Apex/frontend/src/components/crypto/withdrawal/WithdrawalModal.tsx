@@ -18,6 +18,7 @@ import {
   Chip,
   Typography,
   IconButton,
+  Stack,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
@@ -199,15 +200,36 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       </DialogContent>
 
       {step !== 'review' && (
-        <DialogActions sx={{ p: { xs: 1.5, sm: 2 }, flexShrink: 0 }}>
+        <DialogActions sx={{ p: { xs: 1.5, sm: 2 }, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
           {step === 'input' && (
-            <Button onClick={handleClose} variant="outlined" fullWidth>
-              Cancel
-            </Button>
+            <Stack
+              direction={{ xs: 'column-reverse', sm: 'row' }}
+              spacing={1.5}
+              sx={{ width: '100%', justifyContent: 'flex-end' }}
+            >
+              <Button
+                onClick={handleClose}
+                variant="outlined"
+                color="inherit"
+                fullWidth={isMobile}
+                sx={{ minHeight: 44 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="withdrawal-form"
+                variant="contained"
+                fullWidth={isMobile}
+                sx={{ minHeight: 44 }}
+              >
+                Review Withdrawal
+              </Button>
+            </Stack>
           )}
 
           {step === 'pending' && (
-            <Button onClick={handleClose} variant="contained" fullWidth>
+            <Button onClick={handleClose} variant="contained" fullWidth sx={{ minHeight: 44 }}>
               Done
             </Button>
           )}

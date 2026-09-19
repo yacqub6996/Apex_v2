@@ -72,32 +72,38 @@ export const AccountOverview: React.FC = () => {
     const copyWallet = Number((user as any)?.copy_trading_wallet_balance ?? 0);
     const longTermWallet = Number((user as any)?.long_term_wallet_balance ?? 0);
     const transferableNow = wallet; // main wallet only - immediately available funds
+    const strategyCashReserves = copyWallet + longTermWallet; // unallocated sub-wallet cash reserves
     const copyAllocated = Number((user as any)?.copy_trading_balance ?? user?.allocatedCopyBalance ?? 0);
     const longTermAllocated = Number((user as any)?.long_term_balance ?? user?.longTermBalance ?? 0);
     const activelyInvested = copyAllocated + longTermAllocated; // all allocations
-    const grandTotal = wallet + copyWallet + longTermWallet + activelyInvested; // all balances and allocations
+    const grandTotal = transferableNow + strategyCashReserves + activelyInvested; // all balances and allocations
     const total = grandTotal; // use grand total for percentage calculations
     const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
     return {
       wallet,
       copyWallet,
       longTermWallet,
+      copyAllocated,
+      longTermAllocated,
       total,
       transferableNow,
+      strategyCashReserves,
       activelyInvested,
       grandTotal,
       pctWallet: pct(wallet),
       pctCopy: pct(copyWallet),
       pctLong: pct(longTermWallet),
+      pctStrategyReserves: pct(strategyCashReserves),
+      pctInvested: pct(activelyInvested),
     };
   }, [user]);
 
   const allocationSlices = useMemo(() => {
     const slices = [
       { id: 'Main wallet', value: balances.wallet, color: theme.palette.primary.main },
-      { id: 'Copy trading', value: balances.copyWallet, color: theme.palette.success.main },
-      { id: 'Long-term', value: balances.longTermWallet, color: theme.palette.warning.main },
-      { id: 'Allocated', value: balances.activelyInvested, color: theme.palette.info.main },
+      { id: 'Copy reserves', value: balances.copyWallet, color: theme.palette.success.main },
+      { id: 'Long-term reserves', value: balances.longTermWallet, color: theme.palette.warning.main },
+      { id: 'Actively invested', value: balances.activelyInvested, color: theme.palette.info.main },
     ];
     const hasValue = slices.some((s) => s.value > 0);
     return hasValue ? slices : slices.map((s, idx) => ({ ...s, value: idx === 0 ? 1 : 0 }));
@@ -135,11 +141,13 @@ export const AccountOverview: React.FC = () => {
   const Stat = ({
     title,
     value,
+    subtitle,
     colorKey = 'primary',
     action,
   }: {
     title: string;
     value: number;
+    subtitle?: string;
     colorKey?: 'primary' | 'success' | 'warning' | 'info';
     action?: React.ReactNode;
   }) => (
@@ -147,6 +155,11 @@ export const AccountOverview: React.FC = () => {
       <CardContent>
         <Typography variant="body2" color="text.secondary">{title}</Typography>
         <Typography variant="h6" fontWeight={700} sx={{ color: `${colorKey}.main` }}>{formatCurrency(value)}</Typography>
+        {subtitle && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {subtitle}
+          </Typography>
+        )}
         {action}
       </CardContent>
     </Card>
@@ -156,17 +169,37 @@ export const AccountOverview: React.FC = () => {
     <Stack spacing={3}>
       <Card variant="outlined" sx={{ borderRadius: 3 }}>
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', lg: 'center' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 2, sm: 3 }} alignItems={{ xs: 'flex-start', sm: 'center' }} flexWrap="wrap" rowGap={2}>
+              {/* Pillar 1: Transferable Now */}
               <Box>
-                <Typography variant="caption" color="text.secondary">Transferable Now</Typography>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>Transferable Now</Typography>
                 <Typography variant="h5" fontWeight={800}>{formatCurrency(balances.transferableNow)}</Typography>
+                <Typography variant="caption" color="text.secondary">Main Wallet (Immediate)</Typography>
               </Box>
+
               <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+
+              {/* Pillar 2: Strategy Cash Reserves */}
               <Box>
-                <Typography variant="caption" color="text.secondary">Actively Invested</Typography>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>Strategy Cash Reserves</Typography>
+                <Typography variant="h5" fontWeight={800} sx={{ color: 'info.main' }}>
+                  {formatCurrency(balances.strategyCashReserves)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Copy: {formatCurrency(balances.copyWallet)} · Long-Term: {formatCurrency(balances.longTermWallet)}
+                </Typography>
+              </Box>
+
+              <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+
+              {/* Pillar 3: Actively Invested */}
+              <Box>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>Actively Invested</Typography>
                 <Stack direction="row" spacing={1} alignItems="baseline">
-                  <Typography variant="h5" fontWeight={800}>{formatCurrency(balances.activelyInvested)}</Typography>
+                  <Typography variant="h5" fontWeight={800} sx={{ color: 'success.main' }}>
+                    {formatCurrency(balances.activelyInvested)}
+                  </Typography>
                   {roiQuery.isLoading && (
                     <Chip
                       size="small"
@@ -195,13 +228,12 @@ export const AccountOverview: React.FC = () => {
                     <Chip size="small" label={`ROI (${roiPeriod}): -- %`} color="default" variant="outlined" />
                   )}
                 </Stack>
-                {roiQuery.isSuccess && roiQuery.data && (
-                  <Typography variant="caption" color={roiQuery.data.overall_roi_percentage >= 0 ? "success.main" : "error.main"}>
-                    Total Equity: {formatCurrency(roiQuery.data.total_equity)}
-                  </Typography>
-                )}
+                <Typography variant="caption" color="text.secondary">
+                  Copy: {formatCurrency(balances.copyAllocated)} · Plans: {formatCurrency(balances.longTermAllocated)}
+                </Typography>
               </Box>
             </Stack>
+
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
               <Typography variant="caption" color="text.secondary">ROI Period</Typography>
               <ButtonGroup size="small" variant="outlined" aria-label="Global ROI period selector">
@@ -211,11 +243,25 @@ export const AccountOverview: React.FC = () => {
               </ButtonGroup>
             </Stack>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">Grand Total</Typography>
-            <Typography variant="subtitle1" color="text.secondary" fontWeight={700}>{formatCurrency(balances.grandTotal)}</Typography>
-            <Chip size="small" variant="outlined" label="Not fully withdrawable" />
-            <Button variant="outlined" onClick={() => setMoveFundsOpen(true)} sx={{ ml: 'auto' }}>Move Funds</Button>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+            <Box>
+              <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                Grand Total
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Transferable ({formatCurrency(balances.transferableNow)}) + Strategy Reserves ({formatCurrency(balances.strategyCashReserves)}) + Active ({formatCurrency(balances.activelyInvested)})
+              </Typography>
+            </Box>
+            <Typography variant="subtitle1" fontWeight={800} sx={{ color: 'primary.main', ml: { sm: 1 } }}>
+              {formatCurrency(balances.grandTotal)}
+            </Typography>
+            <Chip size="small" variant="outlined" color="primary" label="100% Reconciled" />
+            <Button variant="outlined" onClick={() => setMoveFundsOpen(true)} sx={{ ml: { sm: 'auto' } }}>
+              Move Funds
+            </Button>
           </Stack>
         </CardContent>
       </Card>
@@ -322,28 +368,46 @@ export const AccountOverview: React.FC = () => {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Stat title="Main Wallet" value={balances.wallet} colorKey="primary" action={<>
-            {pendingQuery.data && (pendingQuery.data as any).main_wallet_pending > 0 && (
-              <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).main_wallet_pending)}</Typography>
-            )}
-            <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
-          </>} />
+          <Stat
+            title="Main Wallet"
+            value={balances.wallet}
+            subtitle="Immediate cash available for transfer or withdrawal"
+            colorKey="primary"
+            action={<>
+              {pendingQuery.data && (pendingQuery.data as any).main_wallet_pending > 0 && (
+                <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).main_wallet_pending)}</Typography>
+              )}
+              <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
+            </>}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Stat title="Copy Trading Wallet" value={balances.copyWallet} colorKey="success" action={<>
-            {pendingQuery.data && (pendingQuery.data as any).copy_trading_wallet_pending > 0 && (
-              <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).copy_trading_wallet_pending)}</Typography>
-            )}
-            <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
-          </>} />
+          <Stat
+            title="Copy Trading Wallet"
+            value={balances.copyWallet}
+            subtitle={`Unallocated reserve (${formatCurrency(balances.copyAllocated)} actively copied)`}
+            colorKey="success"
+            action={<>
+              {pendingQuery.data && (pendingQuery.data as any).copy_trading_wallet_pending > 0 && (
+                <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).copy_trading_wallet_pending)}</Typography>
+              )}
+              <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
+            </>}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Stat title="Long-Term Wallet" value={balances.longTermWallet} colorKey="warning" action={<>
-            {pendingQuery.data && (pendingQuery.data as any).long_term_wallet_pending > 0 && (
-              <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).long_term_wallet_pending)}</Typography>
-            )}
-            <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
-          </>} />
+          <Stat
+            title="Long-Term Wallet"
+            value={balances.longTermWallet}
+            subtitle={`Unallocated reserve (${formatCurrency(balances.longTermAllocated)} in active plans)`}
+            colorKey="warning"
+            action={<>
+              {pendingQuery.data && (pendingQuery.data as any).long_term_wallet_pending > 0 && (
+                <Typography variant="caption" color="text.secondary">Pending −{formatCurrency((pendingQuery.data as any).long_term_wallet_pending)}</Typography>
+              )}
+              <Button size="small" sx={{ mt: 1 }} variant="outlined" onClick={() => setMoveFundsOpen(true)}>Move</Button>
+            </>}
+          />
         </Grid>
       </Grid>
 

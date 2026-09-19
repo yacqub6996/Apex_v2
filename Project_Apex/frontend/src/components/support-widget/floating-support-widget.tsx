@@ -149,7 +149,7 @@ export const FloatingSupportWidget = () => {
         position: 'fixed',
         bottom: { xs: 16, md: 24 },
         right: { xs: 16, md: 24 },
-        zIndex: (theme) => theme.zIndex.snackbar,
+        zIndex: (theme) => theme.zIndex.speedDial,
       }}
     >
       {/* Floating Chat Button - Uses brand primary color */}

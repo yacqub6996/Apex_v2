@@ -11,6 +11,7 @@ import type { CopyTradingHistoryResponse } from "../models/CopyTradingHistoryRes
 import type { CopyTradingStartRequest } from "../models/CopyTradingStartRequest";
 import type { CopyTradingStartResponse } from "../models/CopyTradingStartResponse";
 import type { CopyTradingSummaryResponse } from "../models/CopyTradingSummaryResponse";
+import type { CopyTradingStopPreviewResponse } from "../models/CopyTradingStopPreviewResponse";
 import type { CopyTradingUpdateResponse } from "../models/CopyTradingUpdateResponse";
 import type { CopyTradingWithdrawalRequest } from "../models/CopyTradingWithdrawalRequest";
 import type { CopyTradingWithdrawalResponse } from "../models/CopyTradingWithdrawalResponse";
@@ -138,6 +139,25 @@ export class CopyTradingService {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/copy-trading/copied/{copy_id}/pause",
+            path: {
+                copy_id: copyId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Stop Copy Preview
+     * Return calculated settlement preview (profit, commission due, released equity, escrow holds) before stopping.
+     * @param copyId
+     * @returns CopyTradingStopPreviewResponse Successful Response
+     * @throws ApiError
+     */
+    public static copyTradingGetStopPreview(copyId: string): CancelablePromise<CopyTradingStopPreviewResponse> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/copy-trading/copied/{copy_id}/stop-preview",
             path: {
                 copy_id: copyId,
             },

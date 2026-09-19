@@ -16,6 +16,8 @@ import {
   DialogActions,
   Alert,
   Tooltip,
+  CircularProgress,
+  Divider,
 } from '@mui/material';
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/providers/auth-provider";
@@ -82,6 +84,11 @@ export const CopyTrading = () => {
   const [verificationResult, setVerificationResult] = useState<TraderVerificationResponse | null>(null);
   const [showExecutions, setShowExecutions] = useState(false);
   const [confirmStop, setConfirmStop] = useState<{ open: boolean; copyId: string | null; allocation: number }>({ open: false, copyId: null, allocation: 0 });
+  const stopPreviewQuery = useQuery({
+    queryKey: ["copy-trading-stop-preview", confirmStop.copyId],
+    queryFn: () => CopyTradingService.copyTradingGetStopPreview(confirmStop.copyId!),
+    enabled: Boolean(confirmStop.open && confirmStop.copyId),
+  });
   const [commissionModalState, setCommissionModalState] = useState<{
     open: boolean;
     amount: number;
@@ -422,9 +429,15 @@ export const CopyTrading = () => {
 
   const handleConfirmStopProceed = () => {
     if (confirmStop.copyId) {
-      stopCopyMutation.mutate({ copyId: confirmStop.copyId, allocation: confirmStop.allocation });
+      stopCopyMutation.mutate(
+        { copyId: confirmStop.copyId, allocation: confirmStop.allocation },
+        {
+          onSettled: () => {
+            handleConfirmStopClose();
+          },
+        }
+      );
     }
-    handleConfirmStopClose();
   };
 
   const resumeCopyMutation = useMutation<
@@ -1482,18 +1495,108 @@ export const CopyTrading = () => {
       >
         <DialogTitle>Stop Copy Trading</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Stopping will permanently end this copy relationship.
-          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Your copy equity for this relationship{" "}
-            (<strong>{formatCurrency(confirmStop.allocation)}</strong> plus any realized copy PnL)
-            will be liquidated and returned to your <strong>Copy Trading Wallet</strong> (not your
-            Main Wallet).
+            Stopping will permanently end this copy relationship. Review the calculated settlement breakdown below before confirming liquidation.
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            If this session generated net profits, performance commission will be due upon completion. Liquidated equity will be securely held in escrow until the commission is verified.
-          </Typography>
+
+          {stopPreviewQuery.isLoading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+              <CircularProgress size={36} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Calculating settlement & escrow holds...
+              </Typography>
+            </Box>
+          ) : stopPreviewQuery.isError ? (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Unable to load real-time settlement preview. Your principal allocation of <strong>{formatCurrency(confirmStop.allocation)}</strong> plus any realized copy PnL will be liquidated according to standard settlement rules.
+              </Alert>
+              <Typography variant="body2" color="text.secondary">
+                If this session generated net profits, performance commission will be due upon completion and liquidated equity will be securely held in escrow until the commission is verified.
+              </Typography>
+            </Box>
+          ) : stopPreviewQuery.data ? (
+            <Box>
+              <Box
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  borderRadius: 1,
+                  bgcolor: (theme) =>
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.04)'
+                      : 'rgba(0, 0, 0, 0.02)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Stack spacing={1.2}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Trader:</Typography>
+                    <Typography variant="body2" fontWeight={600}>{stopPreviewQuery.data.trader_name}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Principal Allocation:</Typography>
+                    <Typography variant="body2" fontWeight={500}>{formatCurrency(stopPreviewQuery.data.allocation)}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Session Realized Profit:</Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      color={stopPreviewQuery.data.session_profit > 0 ? 'success.main' : 'text.primary'}
+                    >
+                      {formatCurrency(stopPreviewQuery.data.session_profit)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Performance Fee Rate:</Typography>
+                    <Typography variant="body2">{stopPreviewQuery.data.copy_fee_percentage}%</Typography>
+                  </Box>
+                  <Divider sx={{ my: 0.5 }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Commission Due:</Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      color={stopPreviewQuery.data.commission_due > 0 ? 'warning.main' : 'text.secondary'}
+                    >
+                      {formatCurrency(stopPreviewQuery.data.commission_due)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Total Liquidated Equity:</Typography>
+                    <Typography variant="body2" fontWeight={700}>
+                      {formatCurrency(stopPreviewQuery.data.release_amount)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+
+              {stopPreviewQuery.data.requires_commission_deposit || stopPreviewQuery.data.commission_due > 0 ? (
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                    Performance Commission Required
+                  </Typography>
+                  <Typography variant="caption" display="block" sx={{ mb: 1 }}>
+                    Because this copy session earned {formatCurrency(stopPreviewQuery.data.session_profit)} in profit, a {stopPreviewQuery.data.copy_fee_percentage}% trader performance commission of <strong>{formatCurrency(stopPreviewQuery.data.commission_due)}</strong> is due.
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    <strong>Escrow Hold:</strong> Your liquidated equity of <strong>{formatCurrency(stopPreviewQuery.data.held_released_equity)}</strong> will be held in escrow until commission payment is confirmed. You will be prompted to deposit the commission immediately after stopping.
+                  </Typography>
+                </Alert>
+              ) : (
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                    No Commission Due
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    No performance commission is owed for this session. Your full liquidated equity of <strong>{formatCurrency(stopPreviewQuery.data.immediate_release_amount)}</strong> will be credited immediately to your <strong>Copy Trading Wallet</strong>.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleConfirmStopClose} sx={{ minHeight: 44 }}>
@@ -1503,7 +1606,7 @@ export const CopyTrading = () => {
             onClick={handleConfirmStopProceed}
             variant="contained"
             color="error"
-            disabled={stopCopyMutation.isPending}
+            disabled={stopCopyMutation.isPending || stopPreviewQuery.isLoading}
             sx={{ minHeight: 44 }}
           >
             {stopCopyMutation.isPending ? "Stopping..." : "Stop Copying"}

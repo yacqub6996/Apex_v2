@@ -913,11 +913,31 @@ export const UserDashboard = ({ children }: { children?: ReactNode }) => {
         ? null
         : (isLoading ? <Skeleton variant="rectangular" width={96} height={28} sx={{ borderRadius: 1.5 }} /> : undefined);
 
+    const headerTitle = useMemo(() => {
+        if (pathname.startsWith("/dashboard/account")) return "Account Overview";
+        if (pathname.startsWith("/dashboard/executions")) return "Trade Executions";
+        if (pathname.startsWith("/dashboard/copy-trading")) return "Copy Trading";
+        if (pathname.startsWith("/dashboard/settings")) return "Account Settings";
+        return "Dashboard";
+    }, [pathname]);
+
+    const headerSubtitle = useMemo(() => {
+        if (pathname.startsWith("/dashboard/account"))
+            return "Control deposits, withdrawals, strategy reserves, and wallet allocations";
+        if (pathname.startsWith("/dashboard/executions"))
+            return "View real-time and historical trade execution logs";
+        if (pathname.startsWith("/dashboard/copy-trading"))
+            return "Discover and copy top-performing automated traders";
+        if (pathname.startsWith("/dashboard/settings"))
+            return "Manage your account preferences, security, and profile details";
+        return "Monitor your investments and trading performance";
+    }, [pathname]);
+
     return (
         <>
             <MaterialDashboardLayout
-                title="Dashboard"
-                subtitle="Monitor your investments and trading performance"
+                title={headerTitle}
+                subtitle={headerSubtitle}
                 navigation={USER_NAVIGATION}
                 actions={layoutActions}
                 user={userInfo}

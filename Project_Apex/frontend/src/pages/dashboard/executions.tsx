@@ -36,13 +36,12 @@ const formatTimestamp = (value: string): string => new Date(value).toLocaleStrin
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 
-const computeImpact = (amount: number): string => {
-  if (amount === 0) {
+const formatRoi = (roi: number | null | undefined): string => {
+  if (roi === null || roi === undefined || !Number.isFinite(roi)) {
     return "—";
   }
-  const percentage = (amount / 1000) * 100;
-  const sign = percentage >= 0 ? "+" : "";
-  return `${sign}${percentage.toFixed(2)}%`;
+  const sign = roi >= 0 ? "+" : "";
+  return `${sign}${roi.toFixed(2)}%`;
 };
 
 export const ExecutionFeedPage = () => {
@@ -256,7 +255,7 @@ export const ExecutionFeedPage = () => {
                 <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary' }}>Type</Typography>
                 <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary' }}>Symbol</Typography>
                 <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right' }}>Amount</Typography>
-                <Typography variant="caption" sx={{ gridColumn: 'span 1', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>Impact</Typography>
+                <Typography variant="caption" sx={{ gridColumn: 'span 1', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>ROI %</Typography>
               </Box>
               <Box sx={{ '& > *:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
                 {isLoading ? (
@@ -348,11 +347,11 @@ export const ExecutionFeedPage = () => {
                           </Typography>
                           <Typography
                             className="grid-cell"
-                            data-label="Impact"
+                            data-label="ROI %"
                             variant="caption"
                             sx={{ gridColumn: 'span 1', textAlign: 'right', color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}
                           >
-                            {event.amount ? computeImpact(event.amount) : "—"}
+                            {formatRoi(event.roi_percent)}
                           </Typography>
                         </Box>
                       </motion.div>
@@ -473,7 +472,7 @@ export const ExecutionFeedPage = () => {
                 <Typography variant="caption" sx={{ gridColumn: 'span 4', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary' }}>Plan</Typography>
                 <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary' }}>ROI %</Typography>
                 <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right' }}>Amount</Typography>
-                <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>Impact</Typography>
+                <Typography variant="caption" sx={{ gridColumn: 'span 2', fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>ROI %</Typography>
               </Box>
               <Box sx={{ '& > *:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
                 {isLoading ? (
@@ -556,11 +555,11 @@ export const ExecutionFeedPage = () => {
                         </Typography>
                         <Typography
                           className="grid-cell"
-                          data-label="Impact"
+                          data-label="ROI %"
                           variant="caption"
                           sx={{ gridColumn: 'span 2', textAlign: 'right', color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}
                         >
-                          {event.amount ? computeImpact(event.amount) : "—"}
+                          {formatRoi((event as any).roiPercent ?? (event as any).roi_percent)}
                         </Typography>
                       </Box>
                     </motion.div>
