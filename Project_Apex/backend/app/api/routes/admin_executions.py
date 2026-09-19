@@ -175,44 +175,25 @@ async def push_roi_execution(
         if not trader:
             raise HTTPException(status_code=404, detail="Trader not found")
 
-        # TODO: Re-enable risk tolerance validation with more reasonable limits
-        # For now, allow any ROI within the +/-1000% range for testing
-        # Get trader's risk tolerance and validate ROI against it
-        if payload.roi_percent > 0:
-            # Positive ROI - check if it's reasonable for the risk tolerance
-            if trader.risk_tolerance == RiskTolerance.LOW and payload.roi_percent > 50.0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"ROI percentage of {payload.roi_percent}% is too high for LOW risk tolerance trader"
-                )
-            elif trader.risk_tolerance == RiskTolerance.MEDIUM and payload.roi_percent > 100.0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"ROI percentage of {payload.roi_percent}% is too high for MEDIUM risk tolerance trader"
-                )
-            # HIGH risk tolerance allows up to 1000% (already validated above)
-        elif payload.roi_percent < 0:
-            # Negative ROI - check if loss is reasonable
-            if trader.risk_tolerance == RiskTolerance.LOW and payload.roi_percent < -10.0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"ROI percentage of {payload.roi_percent}% is too low for LOW risk tolerance trader"
-                )
-            elif trader.risk_tolerance == RiskTolerance.MEDIUM and payload.roi_percent < -20.0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"ROI percentage of {payload.roi_percent}% is too low for MEDIUM risk tolerance trader"
-                )
+        # Admin ROI simulation allows ROI within the global +/-1000% safety range
+        # Per-trader LOW/MEDIUM risk tolerance caps are bypassed for admin simulation pushes
 
-        # Get all active copy relationships for this trader
-        active_copies = session.exec(
-            select(UserTraderCopy).where(
-                UserTraderCopy.trader_profile_id == payload.trader_id,
-                UserTraderCopy.copy_status == CopyStatus.ACTIVE,
-            )
-        ).all()
+        # Get active copy relationships for this trader (filtered by user_id if supplied by follower selector)
+        copy_query = select(UserTraderCopy).where(
+            UserTraderCopy.trader_profile_id == payload.trader_id,
+            UserTraderCopy.copy_status == CopyStatus.ACTIVE,
+        )
+        if payload.user_id:
+            copy_query = copy_query.where(UserTraderCopy.user_id == payload.user_id)
+
+        active_copies = session.exec(copy_query).all()
 
         if not active_copies:
+            if payload.user_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No active copy relationships found for this trader and user"
+                )
             raise HTTPException(
                 status_code=400,
                 detail="No active copy relationships found for this trader"
