@@ -168,59 +168,34 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
             </Box>
           </Box>
 
-          {/* Financial Breakdown Rows */}
-          <Stack spacing={1} sx={{ px: 0.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Performance Commission:
-              </Typography>
-              <Typography variant="body2" fontWeight={600}>
-                ${usdAmount.toFixed(2)}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Blockchain Gas & Network Fee:
-              </Typography>
-              <Typography variant="body2" fontWeight={600}>
-                +${vatAmount.toFixed(2)}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Settlement Asset:
-              </Typography>
-              <Chip
-                label="Bitcoin (BTC) • Native Network"
-                size="small"
-                sx={{
-                  fontWeight: 600,
-                  height: 22,
-                  fontSize: '0.72rem',
-                  bgcolor: (theme) =>
-                    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                }}
-              />
-            </Box>
-
-            <Divider sx={{ my: 0.5 }} />
-
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Settlement Summary Row */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              p: 1.25,
+              bgcolor: 'background.paper',
+              borderRadius: 1.5,
+            }}
+          >
+            <Box>
               <Typography variant="subtitle2" fontWeight={700}>
                 Total Due to Send:
               </Typography>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="subtitle1" fontWeight={700} color="primary.main" sx={{ lineHeight: 1.2 }}>
-                  ${totalAmount.toFixed(2)}
-                </Typography>
-                <Typography variant="caption" fontWeight={600} color="text.secondary">
-                  ≈ {cryptoAmount} BTC
-                </Typography>
-              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>
+                Bitcoin (BTC) • Native Network (includes $5 gas)
+              </Typography>
             </Box>
-          </Stack>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="subtitle1" fontWeight={700} color="primary.main" sx={{ lineHeight: 1.2 }}>
+                ${totalAmount.toFixed(2)}
+              </Typography>
+              <Typography variant="caption" fontWeight={600} color="text.secondary">
+                ≈ {cryptoAmount} BTC
+              </Typography>
+            </Box>
+          </Box>
 
           {/* Escrow Release Notice */}
           <Box

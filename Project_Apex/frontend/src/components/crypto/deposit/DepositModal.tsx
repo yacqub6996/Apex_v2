@@ -303,9 +303,11 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           sx={{
             flex: 1,
             overflowY: 'auto',
+            overflowX: 'hidden',
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
-            p: { xs: 1.75, sm: 3 },
+            px: { xs: 2, sm: 3 },
+            py: { xs: 1.75, sm: 3 },
           }}
         >
           {/* Error alerts */}

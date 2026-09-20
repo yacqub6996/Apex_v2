@@ -21,7 +21,6 @@ import {
   DialogActions,
   Divider,
 } from '@mui/material'
-import Grid from '@mui/material/Grid'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import WarningIcon from '@mui/icons-material/Warning'
@@ -148,9 +147,16 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
         </Alert>
       )}
 
-      <Grid container spacing={{ xs: 2, md: 3 }} alignItems="stretch">
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '7fr 5fr' },
+          gap: { xs: 2, md: 3 },
+          alignItems: 'stretch',
+        }}
+      >
         {/* Address Details */}
-        <Grid size={{ xs: 12, md: 7 }}>
+        <Box sx={{ minWidth: 0 }}>
           <Stack spacing={{ xs: 1.5, sm: 2 }}>
             {/* Deposit Address */}
             <Box>
@@ -264,13 +270,13 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               </Typography>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {isCommission ? 'Trader Performance Commission:' : 'Deposit Amount:'}
+                  {isCommission ? 'Performance Commission:' : 'Deposit Amount:'}
                 </Typography>
                 <Typography variant="caption" fontWeight={600}>${session.amountUsd.toFixed(2)}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {isCommission ? 'Blockchain Network Fee:' : 'Network Fee:'}
+                  {isCommission ? 'Blockchain Gas Fee:' : 'Network Fee:'}
                 </Typography>
                 <Typography variant="caption" fontWeight={600}>+${(session.vatFeeUsd || 5).toFixed(2)}</Typography>
               </Box>
@@ -293,10 +299,10 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               </Typography>
             </Alert>
           </Stack>
-        </Grid>
+        </Box>
 
         {/* QR Code */}
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Box sx={{ minWidth: 0 }}>
           <Paper
             variant="outlined"
             sx={{
@@ -316,8 +322,8 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
               Scan with your wallet app to copy address
             </Typography>
           </Paper>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Primary Confirmation Action (optional in body if handled by sticky footer) */}
       {showConfirmButton && !isExpired && (
