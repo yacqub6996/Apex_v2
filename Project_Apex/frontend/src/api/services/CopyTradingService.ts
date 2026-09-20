@@ -19,6 +19,7 @@ import type { ExecutionFeedResponse } from "../models/ExecutionFeedResponse";
 import type { FundWalletRequest } from "../models/FundWalletRequest";
 import type { FundWalletResponse } from "../models/FundWalletResponse";
 import type { PartialReduceRequest } from "../models/PartialReduceRequest";
+import type { TopUpAllocationRequest } from "../models/TopUpAllocationRequest";
 import type { TraderVerificationRequest } from "../models/TraderVerificationRequest";
 import type { TraderVerificationResponse } from "../models/TraderVerificationResponse";
 
@@ -201,6 +202,28 @@ export class CopyTradingService {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/copy-trading/copied/{copy_id}/reduce",
+            path: {
+                copy_id: copyId,
+            },
+            body: requestBody,
+            mediaType: "application/json",
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Top Up Copy Allocation
+     * Add funds from Copy Trading Wallet to an existing ACTIVE or PAUSED copy relationship.
+     * @param copyId
+     * @param requestBody
+     * @returns CopyTradingUpdateResponse Successful Response
+     * @throws ApiError
+     */
+    public static copyTradingTopUpAllocation(copyId: string, requestBody: TopUpAllocationRequest): CancelablePromise<CopyTradingUpdateResponse> {
+        return __request(OpenAPI, {
+            method: "POST",
+            url: "/api/v1/copy-trading/copied/{copy_id}/top-up",
             path: {
                 copy_id: copyId,
             },

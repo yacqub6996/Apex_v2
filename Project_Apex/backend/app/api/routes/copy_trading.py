@@ -313,6 +313,11 @@ class PartialReduceRequest(SQLModel):
     amount: float
 
 
+class TopUpAllocationRequest(SQLModel):
+    amount: float
+
+
+
 class ExecutionFeedEvent(SQLModel):
     id: uuid.UUID
     event_type: ExecutionEventType
@@ -1490,7 +1495,87 @@ def reduce_copy_allocation(
     )
 
 
+@router.post("/copied/{copy_id}/top-up", response_model=CopyTradingUpdateResponse)
+def top_up_copy_allocation(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    copy_id: uuid.UUID,
+    payload: TopUpAllocationRequest,
+) -> Any:
+    """Add funds from Copy Trading Wallet to an existing ACTIVE or PAUSED copy relationship."""
+    copy = _load_copy_relationship(session, current_user, copy_id)
+    if copy.copy_status == CopyStatus.STOPPED:
+        raise HTTPException(
+            status_code=400, detail="Cannot top up a stopped copy relationship"
+        )
+
+    try:
+        amount = float(payload.amount)
+    except Exception:
+        amount = 0.0
+    amount = round(amount, 2)
+    if amount <= 0 or abs(amount - round(amount)) > 1e-9:
+        raise HTTPException(
+            status_code=400,
+            detail="Top-up amount must be a positive whole dollar amount",
+        )
+
+    session.refresh(copy, attribute_names=["user"])
+    if not copy.user:
+        raise HTTPException(
+            status_code=404, detail="User not found for copy relationship"
+        )
+
+    session.refresh(copy.user, attribute_names=["copy_trading_wallet"])
+    if copy.user.copy_trading_wallet is None:
+        from app.models import CopyTradingWallet
+
+        copy.user.copy_trading_wallet = CopyTradingWallet(
+            user_id=copy.user.id, balance=0.0
+        )
+        session.add(copy.user.copy_trading_wallet)
+        session.flush()
+
+    ct_wallet_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
+    if amount > ct_wallet_balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient Copy Trading Wallet balance (${ct_wallet_balance:.2f}). Please transfer funds to your copy wallet first.",
+        )
+
+    # Apply atomic balance updates: Copy Trading Wallet -> Copy Allocation
+    copy.copy_amount = round(float(copy.copy_amount or 0.0) + amount, 2)
+    copy.user.copy_trading_balance = round(
+        float(copy.user.copy_trading_balance or 0.0) + amount, 2
+    )
+    copy.user.copy_trading_wallet.balance = round(ct_wallet_balance - amount, 2)
+
+    session.add(copy)
+    session.add(copy.user)
+    session.add(copy.user.copy_trading_wallet)
+    _record_balance_delta(
+        session,
+        user_id=copy.user.id,
+        amount=-amount,
+        description="Copy trading allocation topped up",
+    )
+    session.commit()
+    session.refresh(copy, attribute_names=["trader_profile"])
+    session.refresh(copy.user, attribute_names=["copy_trading_wallet"])
+
+    copied_summary = _build_copied_trader(copy)
+    available_balance = float(copy.user.copy_trading_wallet.balance or 0.0)
+    return CopyTradingUpdateResponse(
+        success=True,
+        message="Copy trading allocation topped up successfully",
+        available_balance=available_balance,
+        copied_trader=copied_summary,
+    )
+
+
 @router.post("/copied/{copy_id}/resume", response_model=CopyTradingUpdateResponse)
+
 def resume_copy_relationship(
     *,
     session: SessionDep,

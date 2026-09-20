@@ -137,6 +137,7 @@ export type { SimulationTriggerResponse } from "./models/SimulationTriggerRespon
 export type { SubscribeLongTermRequest } from "./models/SubscribeLongTermRequest";
 export type { SubscribeLongTermResponse } from "./models/SubscribeLongTermResponse";
 export type { Token } from "./models/Token";
+export type { TopUpAllocationRequest } from "./models/TopUpAllocationRequest";
 export type { TradeCreate } from "./models/TradeCreate";
 export type { TradePublic } from "./models/TradePublic";
 export type { TraderCreateRequest } from "./models/TraderCreateRequest";

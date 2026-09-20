@@ -107,6 +107,15 @@ export const CopyTrading = () => {
     releasedEquity: 0,
   });
 
+  const [topUpModal, setTopUpModal] = useState<{
+    open: boolean;
+    copyId: string;
+    traderName: string;
+    currentAllocation: number;
+  }>({ open: false, copyId: "", traderName: "", currentAllocation: 0 });
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpError, setTopUpError] = useState<string | null>(null);
+
   const { copied, copy: copyClipboard } = useClipboard();
 
   const handleCopyTraderCode = async (code: string) => {
@@ -459,6 +468,61 @@ export const CopyTrading = () => {
   const handleResumeCopy = (copyId: string) => {
     resumeCopyMutation.mutate(copyId);
   };
+
+  const topUpMutation = useMutation<
+    CopyTradingUpdateResponse,
+    Error,
+    { copyId: string; amount: number }
+  >({
+    mutationFn: ({ copyId, amount }) =>
+      CopyTradingService.copyTradingTopUpAllocation(copyId, { amount } as any),
+    onSuccess: (data) => {
+      toast.success(data.message || "Copy trading allocation topped up successfully");
+      invalidateCopyTradingState();
+      handleCloseTopUp();
+    },
+    onError: (err) => {
+      const msg = extractApiErrorMessage(err, "Failed to top up allocation");
+      setTopUpError(msg);
+      toast.error(msg);
+    },
+  });
+
+  const handleOpenTopUp = (trader: any) => {
+    setTopUpError(null);
+    setTopUpAmount("");
+    setTopUpModal({
+      open: true,
+      copyId: trader.copy_id || trader.id,
+      traderName: trader.displayName || trader.display_name || "Trader",
+      currentAllocation: Number(trader.allocation) || 0,
+    });
+  };
+
+  const handleCloseTopUp = () => {
+    setTopUpModal({ open: false, copyId: "", traderName: "", currentAllocation: 0 });
+    setTopUpAmount("");
+    setTopUpError(null);
+  };
+
+  const handleConfirmTopUp = () => {
+    const amt = parseFloat(topUpAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setTopUpError("Please enter a valid positive amount");
+      return;
+    }
+    if (Math.abs(amt - Math.round(amt)) > 1e-9) {
+      setTopUpError("Top-up amount must be a whole dollar amount");
+      return;
+    }
+    if (amt > copyWalletBalance) {
+      setTopUpError(`Insufficient Copy Trading Wallet balance (${formatCurrency(copyWalletBalance)})`);
+      return;
+    }
+    if (!topUpModal.copyId) return;
+    topUpMutation.mutate({ copyId: topUpModal.copyId, amount: amt });
+  };
+
 
   // use shared helper for absolute resource URLs
 
@@ -1137,6 +1201,14 @@ export const CopyTrading = () => {
                       >
                         <Chip label={trader.status} color={getStatusColor(trader.status)} size="small" />
                         <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          onClick={() => handleOpenTopUp(trader)}
+                        >
+                          Top Up
+                        </Button>
                         {trader.status === "ACTIVE" && (
                           <Button
                             size="small"
@@ -1486,6 +1558,162 @@ export const CopyTrading = () => {
         onClose={() => setMoveFundsOpen(false)}
         initialRoute={moveFundsRoute}
       />
+
+      {/* Top Up Allocation Sheet */}
+      <ApexBottomSheet
+        open={topUpModal.open}
+        onClose={handleCloseTopUp}
+        variant="bottom-sheet"
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ px: { xs: 2.5, sm: 3 }, pt: { xs: 2, sm: 2.5 } }}>
+          Top Up Allocation — {topUpModal.traderName}
+        </DialogTitle>
+        <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 1.5, overflowY: 'auto' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Add funds directly to your active copy relationship with <strong>{topUpModal.traderName}</strong> from your Copy Trading Wallet.
+          </Typography>
+
+          <Box
+            sx={{
+              p: 2,
+              mb: 2.5,
+              borderRadius: 2,
+              bgcolor: 'background.default',
+              border: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Stack spacing={1.2}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary">Current Allocation:</Typography>
+                <Typography variant="body2" fontWeight={600}>{formatCurrency(topUpModal.currentAllocation)}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2" color="text.secondary">Copy Trading Wallet Balance:</Typography>
+                <Typography variant="body2" fontWeight={700} color={copyWalletBalance > 0 ? "success.main" : "text.secondary"}>
+                  {formatCurrency(copyWalletBalance)}
+                </Typography>
+              </Box>
+              {Number(topUpAmount) > 0 && (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">New Total Allocation:</Typography>
+                    <Typography variant="body2" fontWeight={700} color="primary.main">
+                      {formatCurrency(topUpModal.currentAllocation + (Number(topUpAmount) || 0))}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+            </Stack>
+          </Box>
+
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+              Top-Up Amount (USD)
+            </Typography>
+            <TextField
+              type="number"
+              placeholder="e.g. 100"
+              value={topUpAmount}
+              onChange={(e) => {
+                setTopUpAmount(e.target.value);
+                setTopUpError(null);
+              }}
+              variant="outlined"
+              fullWidth
+              autoFocus
+              inputProps={{ min: 1, step: 1 }}
+            />
+          </Box>
+
+          {/* Quick preset chips */}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+            {[50, 100, 250, 500].map((preset) => (
+              <Chip
+                key={preset}
+                label={`+$${preset}`}
+                clickable
+                onClick={() => {
+                  setTopUpAmount(String(preset));
+                  setTopUpError(null);
+                }}
+                color={topUpAmount === String(preset) ? "primary" : "default"}
+                size="small"
+              />
+            ))}
+            {copyWalletBalance > 0 && (
+              <Chip
+                label="Max Available"
+                clickable
+                onClick={() => {
+                  setTopUpAmount(String(Math.floor(copyWalletBalance)));
+                  setTopUpError(null);
+                }}
+                variant="outlined"
+                color="primary"
+                size="small"
+              />
+            )}
+          </Box>
+
+          {topUpError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {topUpError}
+            </Alert>
+          )}
+
+          {copyWalletBalance < (Number(topUpAmount) || 1) && (
+            <Alert
+              severity="info"
+              action={
+                <Button
+                  size="small"
+                  color="inherit"
+                  onClick={() => {
+                    handleCloseTopUp();
+                    handleOpenMoveFunds('MAIN_TO_COPY');
+                  }}
+                >
+                  Transfer
+                </Button>
+              }
+              sx={{ mb: 1 }}
+            >
+              Need more funds? Transfer from your Main Wallet.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            px: { xs: 2.5, sm: 3 },
+            py: { xs: 1.5, sm: 2 },
+            pb: { xs: 'max(16px, env(safe-area-inset-bottom, 0px))', sm: 2 },
+          }}
+        >
+          <Button onClick={handleCloseTopUp} sx={{ minHeight: 44 }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmTopUp}
+            variant="contained"
+            color="primary"
+            disabled={
+              topUpMutation.isPending ||
+              !topUpAmount ||
+              Number(topUpAmount) <= 0 ||
+              Number(topUpAmount) > copyWalletBalance
+            }
+            sx={{ minHeight: 44, fontWeight: 600 }}
+          >
+            {topUpMutation.isPending ? "Topping Up..." : "Confirm Top Up"}
+          </Button>
+        </DialogActions>
+      </ApexBottomSheet>
 
       {/* Stop Copy Relationship Confirmation */}
       <ApexBottomSheet
