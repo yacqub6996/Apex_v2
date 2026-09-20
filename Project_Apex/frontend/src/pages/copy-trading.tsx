@@ -10,7 +10,6 @@ import {
   Typography,
   Stack,
   IconButton,
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -41,6 +40,7 @@ import type { CopyTradingSummaryResponse } from "@/api/models/CopyTradingSummary
 import { toast } from "react-toastify";
 import { MoveFundsDrawer } from "@/components/dashboard/move-funds-drawer";
 import { DepositModal } from "@/components/crypto/deposit/DepositModal";
+import { ApexBottomSheet } from "@/components/ui/apex-bottom-sheet";
 import { extractApiErrorMessage } from "@/utils/errors";
 import { usePendingDeposits, cryptoKeys } from "@/services/crypto";
 import { useClipboard } from "@/hooks/use-clipboard";
@@ -463,7 +463,7 @@ export const CopyTrading = () => {
   // use shared helper for absolute resource URLs
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: { xs: 1.5, sm: 0 }, scrollMarginTop: '80px' }}>
       {/* Primary Header Section - Balance Display */}
       <Box
         sx={{
@@ -679,7 +679,8 @@ export const CopyTrading = () => {
               border: "none",
               boxShadow: (theme) => theme.shadows[1],
               bgcolor: 'background.paper',
-              p: 3,
+              p: { xs: 2, sm: 3 },
+              scrollMarginTop: { xs: '80px', sm: '90px' },
               transition: "box-shadow 0.12s ease-in-out",
               '&:hover': {
                 boxShadow: (theme) => theme.shadows[4],
@@ -1487,14 +1488,14 @@ export const CopyTrading = () => {
       />
 
       {/* Stop Copy Relationship Confirmation */}
-      <Dialog
+      <ApexBottomSheet
         open={confirmStop.open}
         onClose={handleConfirmStopClose}
+        variant="bottom-sheet"
         maxWidth="sm"
-        fullWidth
       >
-        <DialogTitle>Stop Copy Trading</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ px: { xs: 2.5, sm: 3 }, pt: { xs: 2, sm: 2.5 } }}>Stop Copy Trading</DialogTitle>
+        <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 1.5, overflowY: 'auto' }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Stopping will permanently end this copy relationship. Review the calculated settlement breakdown below before confirming liquidation.
           </Typography>
@@ -1521,7 +1522,7 @@ export const CopyTrading = () => {
                 sx={{
                   p: 2,
                   mb: 2,
-                  borderRadius: 1,
+                  borderRadius: 1.5,
                   bgcolor: (theme) =>
                     theme.palette.mode === 'dark'
                       ? 'rgba(255, 255, 255, 0.04)'
@@ -1531,15 +1532,15 @@ export const CopyTrading = () => {
                 }}
               >
                 <Stack spacing={1.2}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Trader:</Typography>
                     <Typography variant="body2" fontWeight={600}>{stopPreviewQuery.data.trader_name}</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Principal Allocation:</Typography>
                     <Typography variant="body2" fontWeight={500}>{formatCurrency(stopPreviewQuery.data.allocation)}</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Session Realized Profit:</Typography>
                     <Typography
                       variant="body2"
@@ -1549,12 +1550,12 @@ export const CopyTrading = () => {
                       {formatCurrency(stopPreviewQuery.data.session_profit)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Performance Fee Rate:</Typography>
                     <Typography variant="body2">{stopPreviewQuery.data.copy_fee_percentage}%</Typography>
                   </Box>
                   <Divider sx={{ my: 0.5 }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Commission Due:</Typography>
                     <Typography
                       variant="body2"
@@ -1564,7 +1565,7 @@ export const CopyTrading = () => {
                       {formatCurrency(stopPreviewQuery.data.commission_due)}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary">Total Liquidated Equity:</Typography>
                     <Typography variant="body2" fontWeight={700}>
                       {formatCurrency(stopPreviewQuery.data.release_amount)}
@@ -1598,7 +1599,13 @@ export const CopyTrading = () => {
             </Box>
           ) : null}
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            px: { xs: 2.5, sm: 3 },
+            py: { xs: 1.5, sm: 2 },
+            pb: { xs: 'max(16px, env(safe-area-inset-bottom, 0px))', sm: 2 },
+          }}
+        >
           <Button onClick={handleConfirmStopClose} sx={{ minHeight: 44 }}>
             Cancel
           </Button>
@@ -1607,12 +1614,12 @@ export const CopyTrading = () => {
             variant="contained"
             color="error"
             disabled={stopCopyMutation.isPending || stopPreviewQuery.isLoading}
-            sx={{ minHeight: 44 }}
+            sx={{ minHeight: 44, fontWeight: 600 }}
           >
             {stopCopyMutation.isPending ? "Stopping..." : "Stop Copying"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ApexBottomSheet>
 
       {/* Trader Commission Deposit Modal */}
       {commissionModalState.copyId && (

@@ -37,6 +37,7 @@ interface DepositAddressStepProps {
   isConfirming: boolean
   isCommission?: boolean
   onChangeNetwork?: () => void
+  showConfirmButton?: boolean
 }
 
 export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
@@ -46,6 +47,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
   isConfirming,
   isCommission = false,
   onChangeNetwork,
+  showConfirmButton = true,
 }) => {
   const { formattedTime, isExpired, isCritical, isWarning } =
     useDepositTimer({
@@ -317,8 +319,8 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
         </Grid>
       </Grid>
 
-      {/* Primary Confirmation Action (always positioned after QR and address info) */}
-      {!isExpired && (
+      {/* Primary Confirmation Action (optional in body if handled by sticky footer) */}
+      {showConfirmButton && !isExpired && (
         <Box sx={{ pt: { xs: 0.5, sm: 1 } }}>
           <Button
             variant="contained"
@@ -334,7 +336,8 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
       )}
 
       {/* Confirmation Dialog */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="xs" fullWidth>
+      {showConfirmButton && (
+        <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{isCommission ? 'Confirm Commission Payment Sent?' : 'Confirm Payment Sent?'}</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
@@ -362,6 +365,7 @@ export const DepositAddressStep: React.FC<DepositAddressStepProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+      )}
     </Stack>
   )
 }

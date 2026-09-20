@@ -64,6 +64,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   
   const [confirmDismissOpen, setConfirmDismissOpen] = useState(false)
   const [confirmChangeNetworkOpen, setConfirmChangeNetworkOpen] = useState(false)
+  const [confirmPaymentDialogOpen, setConfirmPaymentDialogOpen] = useState(false)
+  const contentRef = React.useRef<HTMLDivElement | null>(null)
 
   const {
     depositSession,
@@ -117,9 +119,17 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     }
   }, [open, user, kycWarningAcknowledged])
 
+  // Reset scroll position to top whenever step changes or modal opens
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'instant' })
+    }
+  }, [step, open])
+
   const handlePerformClose = () => {
     setConfirmDismissOpen(false)
     setConfirmChangeNetworkOpen(false)
+    setConfirmPaymentDialogOpen(false)
     handleReset()
     setKycWarningAcknowledged(false)
     onClose()
@@ -288,6 +298,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
         </DialogTitle>
 
         <DialogContent
+          ref={contentRef}
           dividers={false}
           sx={{
             flex: 1,
@@ -298,7 +309,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           }}
         >
           {/* Error alerts */}
-          {generateError && (
+          {generateError && step === 'input' && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {extractApiErrorMessage(
                 generateError,
@@ -306,7 +317,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               )}
             </Alert>
           )}
-          {confirmError && (
+          {confirmError && step === 'address' && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {extractApiErrorMessage(confirmError, 'Failed to confirm payment')}
             </Alert>
@@ -344,6 +355,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               isConfirming={isConfirming}
               isCommission={isCommission}
               onChangeNetwork={isCommission ? undefined : handleRequestChangeNetwork}
+              showConfirmButton={false}
             />
           )}
 
@@ -389,28 +401,60 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           )}
 
           {step === 'address' && depositSession && (
-            <Box sx={{ display: 'flex', width: '100%', gap: 1.5, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-              <Button
-                onClick={handleRequestChangeNetwork}
-                variant="outlined"
-                color="inherit"
-                sx={{ minWidth: { xs: '100%', sm: 160 } }}
-              >
-                Change Coin / Network
-              </Button>
-              {depositSession.expired ? (
+            <Box
+              sx={{
+                display: 'flex',
+                width: '100%',
+                gap: 1.5,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              {!isCommission && (
                 <Button
-                  onClick={handleRegenerateAddress}
-                  variant="contained"
-                  color="primary"
-                  sx={{ minWidth: { xs: '100%', sm: 160 } }}
+                  onClick={handleRequestChangeNetwork}
+                  variant="outlined"
+                  color="inherit"
+                  sx={{ minWidth: { xs: 'auto', sm: 160 } }}
                 >
-                  {isCommission ? 'Renew Address' : 'Generate New Address'}
+                  Change Coin / Network
                 </Button>
+              )}
+
+              {depositSession.expired ? (
+                <>
+                  <Button onClick={handleRequestClose} variant="outlined" sx={{ minWidth: { xs: 80, sm: 100 } }}>
+                    Close
+                  </Button>
+                  <Button
+                    onClick={handleRegenerateAddress}
+                    variant="contained"
+                    color="primary"
+                    sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 160 }}
+                  >
+                    {isCommission ? 'Renew Address' : 'Generate New Address'}
+                  </Button>
+                </>
               ) : (
-                <Button onClick={handleRequestClose} variant="outlined" sx={{ minWidth: { xs: '100%', sm: 100 } }}>
-                  Close
-                </Button>
+                <>
+                  <Button onClick={handleRequestClose} variant="outlined" sx={{ minWidth: { xs: 80, sm: 100 } }}>
+                    Close
+                  </Button>
+                  <Button
+                    onClick={() => setConfirmPaymentDialogOpen(true)}
+                    variant="contained"
+                    color="primary"
+                    disabled={isConfirming}
+                    sx={{
+                      flex: 1,
+                      minWidth: { xs: 160, sm: 200 },
+                      fontWeight: 700,
+                      py: { xs: 1, sm: 1.25 },
+                    }}
+                  >
+                    {isConfirming ? 'Confirming...' : 'I Have Made Payment'}
+                  </Button>
+                </>
               )}
             </Box>
           )}
@@ -463,6 +507,52 @@ export const DepositModal: React.FC<DepositModalProps> = ({
           <Button onClick={() => setConfirmChangeNetworkOpen(false)}>Keep Current Address</Button>
           <Button onClick={handleConfirmChangeNetwork} variant="contained" color="primary">
             Change Coin / Network
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Payment Sent */}
+      <Dialog
+        open={confirmPaymentDialogOpen}
+        onClose={() => setConfirmPaymentDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{isCommission ? 'Confirm Commission Payment Sent?' : 'Confirm Payment Sent?'}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Please confirm that you have sent{' '}
+            <strong>{depositSession?.cryptoAmount} {depositSession?.asset}</strong> ($
+            {((depositSession?.amountUsd ?? 0) + (depositSession?.vatFeeUsd ?? 5)).toFixed(2)} total) to the deposit
+            address.
+          </Typography>
+          {isCommission ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Once confirmed, our admin team will verify your payment and release your held copy trading equity to your Copy Trading Wallet.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Once confirmed, our admin team will verify the payment and credit your account balance.
+            </Typography>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="caption">
+              Only click confirm if you've actually sent the payment. Our admin team will verify the transaction before crediting.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmPaymentDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={async () => {
+              setConfirmPaymentDialogOpen(false)
+              await handleConfirmClick()
+            }}
+            variant="contained"
+            disabled={isConfirming}
+            autoFocus
+          >
+            {isConfirming ? 'Submitting...' : "Yes, I've Sent Payment"}
           </Button>
         </DialogActions>
       </Dialog>
