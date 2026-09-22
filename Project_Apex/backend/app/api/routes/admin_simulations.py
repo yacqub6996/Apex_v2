@@ -250,6 +250,7 @@ async def request_withdrawal(
             user_id=current_user.id,
             amount=float(transaction.amount or 0.0),
             source="Copy trading balance",
+            transaction_id=str(transaction.id),
         )
     except Exception:
         pass

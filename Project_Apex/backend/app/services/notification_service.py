@@ -581,11 +581,21 @@ def email_wallet_transfer(
     amount: float,
     from_wallet: str,
     to_wallet: str,
-) -> None:
-    """Email user when funds are moved between internal wallets."""
+) -> Notification:
+    """Notify when funds are moved between internal wallets."""
     body = (
         f"A transfer of ${amount:.2f} was completed from your {from_wallet} "
         f"to your {to_wallet} wallet."
+    )
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Wallet Transfer Completed",
+        message=body,
+        notification_type=NotificationType.WALLET_TRANSFER_COMPLETED,
+        related_entity_type="wallet_transfer",
+        action_url="/dashboard",
     )
     _email_user(
         session,
@@ -600,6 +610,7 @@ def email_wallet_transfer(
             status="info",
         ),
     )
+    return notif
 
 
 # Email-only helpers for lifecycle events not backed by specific NotificationTypes
@@ -610,7 +621,8 @@ def email_deposit_pending(
     network: str | None = None,
     address: str | None = None,
     expires_at: str | None = None,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     body_lines = [
         f"Amount: ${amount:.2f}",
     ]
@@ -622,6 +634,17 @@ def email_deposit_pending(
         body_lines.append(f"Expires at: {expires_at}")
     body_lines.append("We will notify you once confirmed. If you didn't request this, please ignore.")
     body_text = "\n".join(body_lines)
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Deposit Started",
+        message=f"Your deposit of ${amount:.2f} is pending confirmation.",
+        notification_type=NotificationType.DEPOSIT_PENDING,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
@@ -634,6 +657,7 @@ def email_deposit_pending(
             cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
         ),
     )
+    return notif
 
 
 def email_deposit_failed(
@@ -641,9 +665,21 @@ def email_deposit_failed(
     user_id: uuid.UUID,
     amount: float,
     reason: str | None = None,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     reason_text = f" Reason: {reason}" if reason else ""
     body = f"Your deposit of ${amount:.2f} could not be completed.{reason_text} Start a new deposit to continue."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Deposit Failed",
+        message=body,
+        notification_type=NotificationType.DEPOSIT_FAILED,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
@@ -656,6 +692,7 @@ def email_deposit_failed(
             cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
         ),
     )
+    return notif
 
 
 def email_withdrawal_requested(
@@ -663,13 +700,26 @@ def email_withdrawal_requested(
     user_id: uuid.UUID,
     amount: float,
     source: str | None = None,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     body = f"Your withdrawal request for ${amount:.2f} has been received." + (f" Source: {source}." if source else "")
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Withdrawal Requested",
+        message=body,
+        notification_type=NotificationType.WITHDRAWAL_REQUESTED,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
         "Withdrawal requested",
         body,
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal requested",
             body=body,
@@ -677,19 +727,33 @@ def email_withdrawal_requested(
             cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
         ),
     )
+    return notif
 
 
 def email_withdrawal_cancelled(
     session: Session,
     user_id: uuid.UUID,
     amount: float,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     body = f"Your withdrawal request for ${amount:.2f} was cancelled. If you still need funds, submit a new request."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Withdrawal Cancelled",
+        message=body,
+        notification_type=NotificationType.WITHDRAWAL_CANCELLED,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
         "Withdrawal cancelled",
         body,
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal cancelled",
             body=body,
@@ -697,6 +761,7 @@ def email_withdrawal_cancelled(
             cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
         ),
     )
+    return notif
 
 
 def email_withdrawal_failed(
@@ -704,13 +769,26 @@ def email_withdrawal_failed(
     user_id: uuid.UUID,
     amount: float,
     reason: str | None = None,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     body = f"Your withdrawal for ${amount:.2f} could not be processed." + (f" Reason: {reason}" if reason else "")
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Withdrawal Failed",
+        message=body,
+        notification_type=NotificationType.WITHDRAWAL_FAILED,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
         "Withdrawal failed",
         body,
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal failed",
             body=body,
@@ -718,6 +796,7 @@ def email_withdrawal_failed(
             cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
         ),
     )
+    return notif
 
 
 def notify_copy_trade_executed(
@@ -867,9 +946,21 @@ def email_deposit_expired(
     user_id: uuid.UUID,
     amount: float,
     expires_at: str | None = None,
-) -> None:
+    transaction_id: str | None = None,
+) -> Notification:
     expiry = f" The address expired at {expires_at}." if expires_at else ""
     body = f"Your deposit of ${amount:.2f} expired before it was confirmed.{expiry} Start a new deposit to continue."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Deposit Expired",
+        message=body,
+        notification_type=NotificationType.DEPOSIT_EXPIRED,
+        related_entity_type="transaction",
+        related_entity_id=transaction_id,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
@@ -883,6 +974,7 @@ def email_deposit_expired(
             status="error",
         ),
     )
+    return notif
 
 
 def email_withdrawal_received(
@@ -890,15 +982,27 @@ def email_withdrawal_received(
     user_id: uuid.UUID,
     amount: float,
     reference: str | None = None,
-) -> None:
+) -> Notification:
     body = f"Your withdrawal of ${amount:.2f} has been delivered to your destination."
     if reference:
         body += f" Reference: {reference}."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Withdrawal Delivered",
+        message=body,
+        notification_type=NotificationType.WITHDRAWAL_DELIVERED,
+        related_entity_type="transaction",
+        related_entity_id=reference,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
         "Withdrawal delivered",
         body,
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal delivered",
             body=body,
@@ -907,6 +1011,7 @@ def email_withdrawal_received(
             status="success",
         ),
     )
+    return notif
 
 
 def email_portfolio_digest(
@@ -959,13 +1064,24 @@ def email_trader_status_change(
     user_id: uuid.UUID,
     trader_name: str,
     new_status: str,
-) -> None:
+) -> Notification:
     body = f"{trader_name} status changed to {new_status}. Your copy strategy may be affected."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Trader Status Update",
+        message=body,
+        notification_type=NotificationType.TRADER_STATUS_CHANGED,
+        related_entity_type="trader_profile",
+        action_url="/copy-trading",
+    )
     _email_user(
         session,
         user_id,
         "Trader status update",
         body,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title="Trader status update",
             body=body,
@@ -974,6 +1090,7 @@ def email_trader_status_change(
             status="info",
         ),
     )
+    return notif
 
 
 def email_drawdown_alert(
@@ -981,13 +1098,24 @@ def email_drawdown_alert(
     user_id: uuid.UUID,
     trader_name: str,
     drawdown: float,
-) -> None:
+) -> Notification:
     body = f"{trader_name} hit a drawdown of {drawdown:.2f}%. Review your copy allocation."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Drawdown Alert",
+        message=body,
+        notification_type=NotificationType.COPY_DRAWDOWN_ALERT,
+        related_entity_type="trader_profile",
+        action_url="/copy-trading",
+    )
     _email_user(
         session,
         user_id,
         "Drawdown alert",
         body,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title="Drawdown alert",
             body=body,
@@ -996,6 +1124,7 @@ def email_drawdown_alert(
             status="error",
         ),
     )
+    return notif
 
 
 def email_new_device_login(
@@ -1065,10 +1194,20 @@ def email_admin_adjustment(
     amount: float,
     reason: str,
     action_label: str | None = None,
-) -> None:
+) -> Notification:
     label = action_label or "Balance update"
     direction = "credited" if amount >= 0 else "debited"
     body = f"{label}: your account was {direction} by ${abs(amount):.2f}. Reason: {reason}."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title=label,
+        message=body,
+        notification_type=NotificationType.ADMIN_ADJUSTMENT,
+        related_entity_type="transaction",
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
@@ -1082,6 +1221,7 @@ def email_admin_adjustment(
             status="info",
         ),
     )
+    return notif
 
 
 def email_chargeback_update(
@@ -1089,9 +1229,20 @@ def email_chargeback_update(
     user_id: uuid.UUID,
     status: str,
     reference: str | None = None,
-) -> None:
+) -> Notification:
     ref = f" Reference: {reference}." if reference else ""
     body = f"Your dispute/chargeback status: {status}.{ref}"
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Dispute Status Updated",
+        message=body,
+        notification_type=NotificationType.CHARGEBACK_UPDATE,
+        related_entity_type="transaction",
+        related_entity_id=reference,
+        action_url="/transactions",
+    )
     _email_user(
         session,
         user_id,
@@ -1105,6 +1256,7 @@ def email_chargeback_update(
             status="info",
         ),
     )
+    return notif
 
 
 def email_compliance_review(
@@ -1175,12 +1327,22 @@ def email_platform_incident(
     user_id: uuid.UUID,
     summary: str,
     details_url: str | None = None,
-) -> None:
+) -> Notification:
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title="Platform Incident Update",
+        message=summary,
+        notification_type=NotificationType.PLATFORM_INCIDENT,
+        related_entity_type="platform",
+        action_url=details_url or "/support",
+    )
     _email_user(
         session,
         user_id,
         "Platform incident update",
         summary,
+        mandatory=True,
         html=render_branded_html(
             title="Platform incident update",
             body=summary,
@@ -1189,6 +1351,7 @@ def email_platform_incident(
             status="error",
         ),
     )
+    return notif
 
 
 def notify_security_alert(

@@ -757,6 +757,7 @@ async def request_copy_trading_withdrawal(
             user_id=current_user.id,
             amount=float(tx.amount or 0.0),
             source="Copy trading wallet",
+            transaction_id=str(tx.id),
         )
     except Exception:
         pass

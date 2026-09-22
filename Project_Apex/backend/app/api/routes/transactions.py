@@ -240,6 +240,7 @@ def update_status(
                 user_id=tx.user_id,
                 amount=float(tx.amount or 0.0),
                 reason="Deposit failed",
+                transaction_id=str(tx.id),
             )
         except Exception as e:
             logger.warning(f"Failed to send deposit failed email: {e}")
@@ -262,6 +263,7 @@ def update_status(
                     session=session,
                     user_id=tx.user_id,
                     amount=float(tx.amount or 0.0),
+                    transaction_id=str(tx.id),
                 )
             else:
                 email_withdrawal_failed(
@@ -269,6 +271,7 @@ def update_status(
                     user_id=tx.user_id,
                     amount=float(tx.amount or 0.0),
                     reason="Withdrawal failed",
+                    transaction_id=str(tx.id),
                 )
         except Exception as e:
             logger.warning(f"Failed to send withdrawal status email: {e}")
@@ -322,6 +325,7 @@ async def cancel_pending_withdrawal(
             session=session,
             user_id=tx.user_id,
             amount=float(tx.amount or 0.0),
+            transaction_id=str(tx.id),
         )
     except Exception as e:
         logger.warning(f"Failed to send withdrawal cancelled email: {e}")

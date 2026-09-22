@@ -513,6 +513,7 @@ async def request_long_term_withdrawal(
             user_id=current_user.id,
             amount=float(tx.amount or 0.0),
             source="Long-term wallet",
+            transaction_id=str(tx.id),
         )
     except Exception:
         pass
@@ -683,6 +684,7 @@ async def request_withdrawal_from_active_investment(
             user_id=current_user.id,
             amount=float(tx.amount or 0.0),
             source="Long-term allocation",
+            transaction_id=str(tx.id),
         )
     except Exception:
         pass

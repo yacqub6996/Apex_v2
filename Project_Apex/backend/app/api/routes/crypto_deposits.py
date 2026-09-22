@@ -286,6 +286,7 @@ async def generate_deposit_address(
             network=request.network,
             address=address,
             expires_at=expires_at.isoformat(),
+            transaction_id=str(transaction.id),
         )
     except Exception:
         # non-blocking
@@ -349,6 +350,7 @@ def confirm_payment_sent(
                     user_id=current_user.id,
                     amount=float(transaction.amount or 0.0),
                     expires_at=transaction.address_expires_at.isoformat() if transaction.address_expires_at else None,
+                    transaction_id=str(transaction.id),
                 )
             except Exception:
                 pass

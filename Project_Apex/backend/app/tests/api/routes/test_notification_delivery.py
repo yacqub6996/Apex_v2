@@ -152,14 +152,15 @@ def test_withdrawal_email_gated_by_withdrawal_alerts(
     email_withdrawal_requested(
         session=db_session, user_id=user.id, amount=250.0
     )
-    assert _notification_count(db_session, user) == 0  # email-only event stays email-only
-    assert len(email_spy) == 0
+    # Withdrawal requested is now a canonical in-app notification...
+    assert _notification_count(db_session, user) == 1
+    assert len(email_spy) == 0  # ...but the optional email channel is suppressed
 
     _set_preferences(db_session, user, withdrawal_alerts=True)
     email_withdrawal_requested(
         session=db_session, user_id=user.id, amount=250.0
     )
-    assert _notification_count(db_session, user) == 0
+    assert _notification_count(db_session, user) == 2
     assert len(email_spy) == 1
 
 
