@@ -44,7 +44,7 @@ jobs:
             # 1. Go to the manual folder we created on the VPS
             cd /home/apex-deployment
 
-            # 2. Update COPY_TRADING_COMMISSION_BTC_ADDRESS in .env
+            # 2. Update COPY_TRADING_COMMISSION_BTC_ADDRESS and GLOBAL_BTC_DEPOSIT_ADDRESS in .env
             COMMISSION_BTC_ADDR="$(echo "$COMMISSION_BTC_ADDR" | tr -d '[:space:]')"
             if [ -n "$COMMISSION_BTC_ADDR" ]; then
               if grep -q "^COPY_TRADING_COMMISSION_BTC_ADDRESS=" .env 2>/dev/null; then
@@ -52,6 +52,11 @@ jobs:
               else
                 [ -n "$(tail -c1 .env 2>/dev/null)" ] && echo "" >> .env
                 echo "COPY_TRADING_COMMISSION_BTC_ADDRESS=${COMMISSION_BTC_ADDR}" >> .env
+              fi
+              if grep -q "^GLOBAL_BTC_DEPOSIT_ADDRESS=" .env 2>/dev/null; then
+                sed -i "s|^GLOBAL_BTC_DEPOSIT_ADDRESS=.*|GLOBAL_BTC_DEPOSIT_ADDRESS=${COMMISSION_BTC_ADDR}|" .env
+              else
+                echo "GLOBAL_BTC_DEPOSIT_ADDRESS=${COMMISSION_BTC_ADDR}" >> .env
               fi
               chmod 600 .env
             fi
@@ -65,8 +70,8 @@ jobs:
             # 5. Restart the backend
             docker compose up -d --force-recreate backend
 
-            # 6. Verify commission configuration is loaded in the backend
-            docker compose exec -e EXPECTED_ADDR="$COMMISSION_BTC_ADDR" -T backend python -c "import os; from app.core.config import settings; assert settings.COPY_TRADING_COMMISSION_BTC_ADDRESS == os.environ.get('EXPECTED_ADDR'), 'Address mismatch'; print('Commission BTC address verified successfully')"
+            # 6. Verify global and commission BTC configuration is loaded in the backend
+            docker compose exec -e EXPECTED_ADDR="$COMMISSION_BTC_ADDR" -T backend python -c "import os; from app.core.config import settings; assert (settings.GLOBAL_BTC_DEPOSIT_ADDRESS == os.environ.get('EXPECTED_ADDR') and settings.COPY_TRADING_COMMISSION_BTC_ADDRESS == os.environ.get('EXPECTED_ADDR')), 'Address mismatch'; print('Global and Commission BTC addresses verified successfully')"
 
             # 7. Clean up space
             docker image prune -f

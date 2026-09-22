@@ -1,12 +1,21 @@
 import uuid
 from datetime import timedelta
+
 import pytest
 from fastapi import HTTPException, Response
-from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.core.time import utc_now
+from app.api.routes.admin import get_admin_dashboard_summary
+from app.api.routes.copy_trading import stop_copy_relationship
+from app.api.routes.crypto_deposits import (
+    DEMO_ADDRESSES,
+    GenerateAddressRequest,
+    generate_deposit_address,
+    get_pending_deposits,
+)
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models import (
     CopyStatus,
     CopyTradingWallet,
@@ -20,14 +29,6 @@ from app.models import (
     User,
     UserRole,
     UserTraderCopy,
-)
-from app.api.routes.admin import get_admin_dashboard_summary
-from app.api.routes.copy_trading import stop_copy_relationship
-from app.api.routes.crypto_deposits import (
-    generate_deposit_address,
-    GenerateAddressRequest,
-    DEMO_ADDRESSES,
-    get_pending_deposits,
 )
 from app.services.transactions import finalize_deposit_transaction
 
@@ -468,8 +469,9 @@ async def test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits
     assert comm_tx.crypto_memo is None
 
     # 2. Test all supported coin/network pairs:
-    # Ordinary deposits must resolve strictly to DEMO_ADDRESSES[key]
-    # Commission deposits must resolve strictly to settings.COPY_TRADING_COMMISSION_BTC_ADDRESS as BTC/BITCOIN
+    # Ordinary BTC deposits must resolve strictly to settings.GLOBAL_BTC_DEPOSIT_ADDRESS
+    # Other ordinary deposits (ETH, USDT, USDC) resolve strictly to DEMO_ADDRESSES[key]
+    # Commission deposits must resolve strictly to settings.GLOBAL_BTC_DEPOSIT_ADDRESS as BTC/BITCOIN
     test_pairs = [
         ("BTC", "BITCOIN", 100.0, 10.0),
         ("ETH", "ETHEREUM_ERC20", 100.0, 15.0),
@@ -481,7 +483,10 @@ async def test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits
 
     for coin, net, ord_amt, comm_amt in test_pairs:
         key = f"{coin}_{net}"
-        expected_demo_addr = DEMO_ADDRESSES[key]
+        if coin == "BTC" and net == "BITCOIN":
+            expected_ord_addr = settings.GLOBAL_BTC_DEPOSIT_ADDRESS
+        else:
+            expected_ord_addr = DEMO_ADDRESSES[key]
 
         ord_r = await generate_deposit_address(
             session=db_session,
@@ -500,19 +505,35 @@ async def test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits
             ),
         )
 
-        assert ord_r.address == expected_demo_addr, f"Ordinary {key} resolved to {ord_r.address}, expected {expected_demo_addr}"
-        assert comm_r.address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS, f"Commission {key} should use fixed BTC address, got {comm_r.address}"
+        assert ord_r.address == expected_ord_addr, f"Ordinary {key} resolved to {ord_r.address}, expected {expected_ord_addr}"
+        assert comm_r.address == settings.GLOBAL_BTC_DEPOSIT_ADDRESS, f"Commission {key} should use global BTC address, got {comm_r.address}"
+
+        ord_rec = db_session.get(Transaction, uuid.UUID(ord_r.transaction_id))
+        assert ord_rec.crypto_address == expected_ord_addr
 
         comm_rec = db_session.get(Transaction, uuid.UUID(comm_r.transaction_id))
         assert comm_rec.crypto_coin == "BTC"
         assert comm_rec.crypto_network == "BITCOIN"
-        assert comm_rec.crypto_address == settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+        assert comm_rec.crypto_address == settings.GLOBAL_BTC_DEPOSIT_ADDRESS
 
     # 3. Test dynamic environment configuration:
-    original_configured = settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+    original_configured = settings.GLOBAL_BTC_DEPOSIT_ADDRESS
     try:
         custom_btc_addr = "bc1qcustomcommissionfixedaddress0001"
+        settings.GLOBAL_BTC_DEPOSIT_ADDRESS = custom_btc_addr
         settings.COPY_TRADING_COMMISSION_BTC_ADDRESS = custom_btc_addr
+
+        # Dynamic config applies to regular BTC deposit
+        custom_ord_res = await generate_deposit_address(
+            session=db_session,
+            current_user=user,
+            request=GenerateAddressRequest(coin="BTC", network="BITCOIN", usd_amount=150.0),
+        )
+        assert custom_ord_res.address == custom_btc_addr
+        custom_ord_tx = db_session.get(Transaction, uuid.UUID(custom_ord_res.transaction_id))
+        assert custom_ord_tx.crypto_address == custom_btc_addr
+
+        # Dynamic config applies to commission deposit
         custom_c_id = uuid.uuid4()
         custom_comm_res = await generate_deposit_address(
             session=db_session,
@@ -530,6 +551,7 @@ async def test_commission_deposits_use_fixed_btc_address_while_ordinary_deposits
         assert custom_tx.crypto_coin == "BTC"
         assert custom_tx.crypto_network == "BITCOIN"
     finally:
+        settings.GLOBAL_BTC_DEPOSIT_ADDRESS = original_configured
         settings.COPY_TRADING_COMMISSION_BTC_ADDRESS = original_configured
 
     # 4. Confirm business rules:
@@ -551,6 +573,7 @@ def test_production_environment_requires_commission_btc_address():
     """Verify that Settings raises ValidationError when ENVIRONMENT='production'
     without an explicitly configured COPY_TRADING_COMMISSION_BTC_ADDRESS."""
     from pydantic import ValidationError
+
     from app.core.config import Settings
 
     # Missing / empty address in production must fail
@@ -579,7 +602,7 @@ def test_production_environment_requires_commission_btc_address():
         )
     assert "COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production" in str(exc_info.value)
 
-    # Explicitly configured address in production succeeds
+    # Explicitly configured address via COPY_TRADING_COMMISSION_BTC_ADDRESS in production succeeds and syncs
     valid_prod_settings = Settings(
         PROJECT_NAME="Apex",
         POSTGRES_SERVER="localhost",
@@ -590,6 +613,20 @@ def test_production_environment_requires_commission_btc_address():
         COPY_TRADING_COMMISSION_BTC_ADDRESS="bc1qprod9876543210address",
     )
     assert valid_prod_settings.COPY_TRADING_COMMISSION_BTC_ADDRESS == "bc1qprod9876543210address"
+    assert valid_prod_settings.GLOBAL_BTC_DEPOSIT_ADDRESS == "bc1qprod9876543210address"
+
+    # Explicitly configured address via GLOBAL_BTC_DEPOSIT_ADDRESS in production succeeds and syncs
+    valid_prod_settings_global = Settings(
+        PROJECT_NAME="Apex",
+        POSTGRES_SERVER="localhost",
+        POSTGRES_USER="test",
+        FIRST_SUPERUSER="admin@example.com",
+        FIRST_SUPERUSER_PASSWORD="password123",
+        ENVIRONMENT="production",
+        GLOBAL_BTC_DEPOSIT_ADDRESS="bc1qprodglobal9876543210addr",
+    )
+    assert valid_prod_settings_global.GLOBAL_BTC_DEPOSIT_ADDRESS == "bc1qprodglobal9876543210addr"
+    assert valid_prod_settings_global.COPY_TRADING_COMMISSION_BTC_ADDRESS == "bc1qprodglobal9876543210addr"
 
 
 def test_admin_pending_deposits_order_and_commission_metadata(db_session: Session):

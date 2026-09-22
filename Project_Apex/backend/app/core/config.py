@@ -13,7 +13,6 @@ from pydantic import (
     computed_field,
     model_validator,
 )
-from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
 
@@ -21,7 +20,7 @@ from typing_extensions import Self
 def parse_cors(v: Any) -> list[str] | str:
     if isinstance(v, str) and not v.startswith("["):
         return [i.strip() for i in v.split(",")]
-    elif isinstance(v, (list, str)):
+    elif isinstance(v, (list, str)):  # noqa: UP038
         return v
     raise ValueError(v)
 
@@ -117,7 +116,7 @@ class Settings(BaseSettings):
         # Check if any email provider is configured
         mailersend_enabled = bool(self.MAILERSEND_API_KEY and self.MAILERSEND_FROM_EMAIL)
         smtp_enabled = bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-        
+
         return mailersend_enabled or smtp_enabled
 
     @computed_field  # type: ignore[prop-decorator]
@@ -131,11 +130,12 @@ class Settings(BaseSettings):
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
-    
+
     # CoinGecko API for live crypto prices
     COINGECKO_API_KEY: str | None = None
 
-    # Copy Trading Commission Fixed BTC Deposit Address
+    # Global & Copy Trading Commission Fixed BTC Deposit Address
+    GLOBAL_BTC_DEPOSIT_ADDRESS: str | None = None
     COPY_TRADING_COMMISSION_BTC_ADDRESS: str | None = None
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
@@ -157,13 +157,21 @@ class Settings(BaseSettings):
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
 
+        btc_addr = self.GLOBAL_BTC_DEPOSIT_ADDRESS or self.COPY_TRADING_COMMISSION_BTC_ADDRESS
+        if btc_addr and btc_addr.strip():
+            btc_addr = btc_addr.strip()
+            self.GLOBAL_BTC_DEPOSIT_ADDRESS = btc_addr
+            self.COPY_TRADING_COMMISSION_BTC_ADDRESS = btc_addr
+
         if self.ENVIRONMENT == "production":
-            if not self.COPY_TRADING_COMMISSION_BTC_ADDRESS or self.COPY_TRADING_COMMISSION_BTC_ADDRESS.strip() in ("changethis", ""):
+            if not btc_addr or btc_addr in ("changethis", ""):
                 raise ValueError(
-                    "COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production."
+                    "GLOBAL_BTC_DEPOSIT_ADDRESS / COPY_TRADING_COMMISSION_BTC_ADDRESS must be explicitly configured in production."
                 )
-        elif not self.COPY_TRADING_COMMISSION_BTC_ADDRESS:
-            self.COPY_TRADING_COMMISSION_BTC_ADDRESS = "bc1q9demo0x9k4u5y6x7z8q2m3n4p5r6s7t8v9w0xy"
+        elif not btc_addr:
+            default_demo_addr = "bc1q9demo0x9k4u5y6x7z8q2m3n4p5r6s7t8v9w0xy"
+            self.GLOBAL_BTC_DEPOSIT_ADDRESS = default_demo_addr
+            self.COPY_TRADING_COMMISSION_BTC_ADDRESS = default_demo_addr
 
         return self
 

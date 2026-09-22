@@ -5,23 +5,22 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
-from sqlmodel import select, desc
+from sqlmodel import desc, select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models import (
     Transaction,
     TransactionPublic,
     TransactionStatus,
     TransactionType,
 )
-from app.core.time import utc_now
+from app.services.coingecko import FALLBACK_RATES, fetch_crypto_prices
 from app.services.notification_service import (
-    email_deposit_pending,
-    email_deposit_failed,
     email_deposit_expired,
+    email_deposit_pending,
 )
-from app.services.coingecko import fetch_crypto_prices, FALLBACK_RATES
 
 router = APIRouter(prefix="/crypto", tags=["crypto"])
 
@@ -67,10 +66,9 @@ class CryptoRates(BaseModel):
 DEFAULT_CRYPTO_RATES = FALLBACK_RATES
 
 # Preconfigured receiving addresses per coin/network.
-# Intentional hardcoded receiving addresses used by Apex as the source of truth for both
-# ordinary deposits and Copy Trading Commission deposits.
+# Intentional hardcoded receiving addresses used by Apex as fallback for non-BTC demo networks.
+# BTC deposits use the configured settings.GLOBAL_BTC_DEPOSIT_ADDRESS / settings.COPY_TRADING_COMMISSION_BTC_ADDRESS.
 DEMO_ADDRESSES = {
-    "BTC_BITCOIN": "bc1q9demo0x9k4u5y6x7z8q2m3n4p5r6s7t8v9w0xy",
     "ETH_ETHEREUM_ERC20": "0x7E57D3m0cAfE0000000000000000000000CaFe00",
     "USDT_TRON_TRC20": "TQ2DeM0Addr3ss111111111111111111111111",
     "USDT_ETHEREUM_ERC20": "0x1111cAFe2222babe3333dEAD4444beef5555cAFE",
@@ -85,8 +83,8 @@ MEMO_REQUIRED_COINS = {"XRP", "XLM", "EOS", "ATOM"}
 
 @router.get("/networks", response_model=list[NetworkInfo])
 def get_available_networks(
-    session: SessionDep,
-    current_user: CurrentUser,
+    session: SessionDep,  # noqa: ARG001
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Any:
     """Get list of available crypto networks for deposits/withdrawals"""
     networks = [
@@ -128,8 +126,8 @@ def get_available_networks(
 
 @router.get("/rates", response_model=CryptoRates)
 async def get_crypto_rates(
-    session: SessionDep,
-    current_user: CurrentUser,
+    session: SessionDep,  # noqa: ARG001
+    current_user: CurrentUser,  # noqa: ARG001
 ) -> Any:
     """
     Get current crypto to USD exchange rates from CoinGecko API.
@@ -205,22 +203,30 @@ async def generate_deposit_address(
     vat_amount = 5.0
     total_amount = request.usd_amount + vat_amount
 
-    # For COPY_TRADING_COMMISSION, force BTC + BITCOIN and use only the configured commission address
+    # For COPY_TRADING_COMMISSION, force BTC + BITCOIN
     if is_commission:
         coin = "BTC"
         network = "BITCOIN"
-        address = settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
-        if not address:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Copy trading commission BTC receiving address is not configured.",
-            )
-        memo = None
     else:
         coin = request.coin
         network = request.network
 
-        # Generate address key
+    # Global BTC address resolution across both normal deposits and commission deposits:
+    if coin == "BTC" and network == "BITCOIN":
+        address = settings.GLOBAL_BTC_DEPOSIT_ADDRESS or settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
+        if not address:
+            err_detail = (
+                "Copy trading commission BTC receiving address is not configured."
+                if is_commission
+                else "Global BTC deposit receiving address is not configured."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=err_detail,
+            )
+        memo = None
+    else:
+        # Generate address key for other supported networks
         address_key = f"{coin}_{network}"
         address = DEMO_ADDRESSES.get(address_key)
 
@@ -354,7 +360,7 @@ def confirm_payment_sent(
     # Mark as confirmed by user
     transaction.payment_confirmed_by_user = True
     transaction.payment_confirmed_at = utc_now()
-    
+
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
@@ -378,6 +384,6 @@ def get_pending_deposits(
         Transaction.transaction_type == TransactionType.DEPOSIT,
         Transaction.status == TransactionStatus.PENDING,
     ).order_by(desc(Transaction.created_at))
-    
+
     transactions = session.exec(statement).all()
     return [TransactionPublic.model_validate(tx) for tx in transactions]
