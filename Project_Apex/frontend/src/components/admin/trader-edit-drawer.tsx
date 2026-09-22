@@ -15,6 +15,7 @@ export const TraderEditDrawer = ({ open, traderId, onClose }: Props) => {
   const [totalCopiers, setTotalCopiers] = useState<string>('0');
   const [assetsUnderCopy, setAssetsUnderCopy] = useState<string>('0');
   const [avgMonthlyReturn, setAvgMonthlyReturn] = useState<string>('0');
+  const [copyFeePercentage, setCopyFeePercentage] = useState<string>('0');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export const TraderEditDrawer = ({ open, traderId, onClose }: Props) => {
     setTotalCopiers(String(t.total_copiers ?? 0));
     setAssetsUnderCopy(String(t.total_assets_under_copy ?? 0));
     setAvgMonthlyReturn(String(t.average_monthly_return ?? 0));
+    setCopyFeePercentage(String(t.copy_fee_percentage ?? 0));
   }, [traderQuery.data]);
 
   const updateMutation = useMutation({
@@ -44,6 +46,7 @@ export const TraderEditDrawer = ({ open, traderId, onClose }: Props) => {
         total_copiers: Math.max(0, parseInt(totalCopiers || '0', 10)),
         total_assets_under_copy: Math.max(0, parseFloat(assetsUnderCopy || '0')),
         average_monthly_return: Math.max(-100, Math.min(100, parseFloat(avgMonthlyReturn || '0'))),
+        copy_fee_percentage: Math.max(0, Math.min(100, parseFloat(copyFeePercentage || '0'))),
       };
       return TradersService.tradersUpdateTrader(traderId, payload as any);
     },
@@ -62,7 +65,7 @@ export const TraderEditDrawer = ({ open, traderId, onClose }: Props) => {
       <Box sx={{ p: 2, display: 'grid', gap: 2 }}>
         <Typography variant="h6" fontWeight={600}>Edit Trader</Typography>
         <Typography variant="body2" color="text.secondary">
-          Update initial performance values. These appear on public cards and summaries.
+          Update trader profile values, including the performance commission charged at Stop Copy.
         </Typography>
         <Divider />
 
@@ -92,6 +95,15 @@ export const TraderEditDrawer = ({ open, traderId, onClose }: Props) => {
               value={avgMonthlyReturn}
               onChange={(e) => setAvgMonthlyReturn(e.target.value)}
               inputProps={{ min: -100, max: 100, step: 0.01 }}
+              fullWidth
+            />
+            <TextField
+              label="Commission (%)"
+              type="number"
+              value={copyFeePercentage}
+              onChange={(e) => setCopyFeePercentage(e.target.value)}
+              inputProps={{ min: 0, max: 100, step: 0.01 }}
+              helperText="Trader performance commission charged at Stop Copy"
               fullWidth
             />
 
