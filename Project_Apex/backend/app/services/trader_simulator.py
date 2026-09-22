@@ -404,9 +404,6 @@ class TraderSimulator:
             scaled_profit_loss = (trader_trade.profit_loss or 0.0) * copy_multiplier
 
             trader_profile = db.get(TraderProfile, trader_trade.trader_profile_id)
-            if trader_profile and trader_profile.copy_fee_percentage > 0:
-                fee = scaled_profit_loss * (trader_profile.copy_fee_percentage / 100)
-                scaled_profit_loss -= fee
 
             follower_trade = Trade(
                 user_id=user.id,
