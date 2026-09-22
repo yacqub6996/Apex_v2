@@ -1184,14 +1184,36 @@ class NotificationUpdate(SQLModel):
     is_read: bool | None = None
 
 
-class UserNotificationPreferences(SQLModel):
-    """User preferences for notifications"""
+class UserNotificationPreferencesBase(SQLModel):
+    """Persisted user preferences for notifications."""
     email_notifications: bool = Field(default=True)
     browser_notifications: bool = Field(default=False)
     copy_trading_alerts: bool = Field(default=True)
     withdrawal_alerts: bool = Field(default=True)
     market_updates: bool = Field(default=False)
     security_alerts: bool = Field(default=True)
+
+
+class UserNotificationPreferences(UserNotificationPreferencesBase, table=True):
+    __tablename__ = "usernotificationpreferences"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", unique=True, nullable=False, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, sa_column_kwargs={"onupdate": utc_now})
+
+
+class UserNotificationPreferencesPublic(UserNotificationPreferencesBase):
+    user_id: uuid.UUID
+    updated_at: datetime
+
+
+class UserNotificationPreferencesUpdate(SQLModel):
+    email_notifications: bool | None = None
+    browser_notifications: bool | None = None
+    copy_trading_alerts: bool | None = None
+    withdrawal_alerts: bool | None = None
+    market_updates: bool | None = None
+    security_alerts: bool | None = None
 
 
 # ============================================================================

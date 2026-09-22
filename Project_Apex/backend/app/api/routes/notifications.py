@@ -12,6 +12,8 @@ from app.models import (
     NotificationPublic,
     NotificationsPublic,
     NotificationUpdate,
+    UserNotificationPreferencesPublic,
+    UserNotificationPreferencesUpdate,
 )
 from app.services.notification_service import NotificationService
 
@@ -24,23 +26,31 @@ def get_notifications(
     session: Session = Depends(get_db),
     unread_only: bool = False,
     limit: int = 50,
+    offset: int = 0,
 ) -> Any:
     """
-    Get current user's notifications.
-    
+    Get current user's notifications (newest first, safely paginated).
+
     - **unread_only**: If True, only return unread notifications
-    - **limit**: Maximum number of notifications to return (default: 50)
+    - **limit**: Maximum number of notifications to return (default: 50, max: 100)
+    - **offset**: Number of notifications to skip (default: 0)
     """
     notifications = NotificationService.get_user_notifications(
         session=session,
         user_id=current_user.id,
         unread_only=unread_only,
         limit=limit,
+        offset=offset,
     )
-    
+    total = NotificationService.count_user_notifications(
+        session=session,
+        user_id=current_user.id,
+        unread_only=unread_only,
+    )
+
     return NotificationsPublic(
         data=notifications,
-        count=len(notifications),
+        count=total,
     )
 
 
@@ -60,6 +70,33 @@ def get_unread_count(
     return {"count": count}
 
 
+@router.get("/preferences", response_model=UserNotificationPreferencesPublic)
+def get_notification_preferences(
+    current_user: CurrentUser,
+    session: Session = Depends(get_db),
+) -> Any:
+    """Get the current user's persisted notification preferences."""
+    return NotificationService.get_or_create_preferences(
+        session=session,
+        user_id=current_user.id,
+    )
+
+
+@router.put("/preferences", response_model=UserNotificationPreferencesPublic)
+def update_notification_preferences(
+    current_user: CurrentUser,
+    preferences_update: UserNotificationPreferencesUpdate,
+    session: Session = Depends(get_db),
+) -> Any:
+    """Update the current user's persisted notification preferences."""
+    updates = preferences_update.model_dump(exclude_unset=True)
+    return NotificationService.update_preferences(
+        session=session,
+        user_id=current_user.id,
+        updates=updates,
+    )
+
+
 @router.patch("/{notification_id}", response_model=NotificationPublic)
 def update_notification(
     notification_id: uuid.UUID,
@@ -68,20 +105,28 @@ def update_notification(
     session: Session = Depends(get_db),
 ) -> Any:
     """
-    Update a notification (mark as read/unread).
+    Update a notification's read state.
+
+    - **is_read**: True marks the notification as read; False marks it unread.
     """
-    notification = NotificationService.mark_as_read(
+    is_read = (
+        notification_update.is_read
+        if notification_update.is_read is not None
+        else True
+    )
+    notification = NotificationService.set_read_state(
         session=session,
         notification_id=notification_id,
         user_id=current_user.id,
+        is_read=is_read,
     )
-    
+
     if not notification:
         raise HTTPException(
             status_code=404,
             detail="Notification not found or you don't have permission to update it",
         )
-    
+
     return notification
 
 

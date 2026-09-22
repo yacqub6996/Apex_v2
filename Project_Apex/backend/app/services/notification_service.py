@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.models import (
     Notification,
@@ -16,6 +16,7 @@ from app.models import (
     NotificationType,
     User,
     TraderProfile,
+    UserNotificationPreferences,
 )
 from app.core.time import utc_now
 from app.services.email_sender import EmailPayload, send_email, render_branded_html, get_frontend_base
@@ -71,17 +72,63 @@ class NotificationService:
         user_id: uuid.UUID,
         unread_only: bool = False,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[Notification]:
-        """Get notifications for a user"""
+        """Get notifications for a user (newest first, safely paginated)."""
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+
         query = select(Notification).where(Notification.user_id == user_id)
-        
+
         if unread_only:
             query = query.where(Notification.is_read == False)
-        
-        query = query.order_by(Notification.created_at.desc()).limit(limit)
-        
+
+        query = (
+            query.order_by(Notification.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
         notifications = session.exec(query).all()
         return list(notifications)
+
+    @staticmethod
+    def count_user_notifications(
+        session: Session,
+        user_id: uuid.UUID,
+        unread_only: bool = False,
+    ) -> int:
+        """Count notifications for a user using a database COUNT."""
+        query = (
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user_id)
+        )
+        if unread_only:
+            query = query.where(Notification.is_read == False)
+
+        count = session.exec(query).one()
+        return int(count or 0)
+
+    @staticmethod
+    def set_read_state(
+        session: Session,
+        notification_id: uuid.UUID,
+        user_id: uuid.UUID,
+        is_read: bool,
+    ) -> Optional[Notification]:
+        """Set a notification's read state (mark read or unread)."""
+        notification = session.get(Notification, notification_id)
+
+        if notification and notification.user_id == user_id:
+            notification.is_read = is_read
+            notification.read_at = utc_now() if is_read else None
+            session.add(notification)
+            session.commit()
+            session.refresh(notification)
+            return notification
+
+        return None
 
     @staticmethod
     def mark_as_read(
@@ -89,18 +136,13 @@ class NotificationService:
         notification_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> Optional[Notification]:
-        """Mark a notification as read"""
-        notification = session.get(Notification, notification_id)
-        
-        if notification and notification.user_id == user_id:
-            notification.is_read = True
-            notification.read_at = utc_now()
-            session.add(notification)
-            session.commit()
-            session.refresh(notification)
-            return notification
-        
-        return None
+        """Mark a notification as read."""
+        return NotificationService.set_read_state(
+            session=session,
+            notification_id=notification_id,
+            user_id=user_id,
+            is_read=True,
+        )
 
     @staticmethod
     def mark_all_as_read(
@@ -130,14 +172,16 @@ class NotificationService:
         session: Session,
         user_id: uuid.UUID,
     ) -> int:
-        """Get count of unread notifications for a user"""
+        """Get count of unread notifications for a user using a database COUNT."""
         count = session.exec(
-            select(Notification).where(
+            select(func.count())
+            .select_from(Notification)
+            .where(
                 Notification.user_id == user_id,
-                Notification.is_read == False
+                Notification.is_read == False,
             )
-        ).all()
-        return len(list(count))
+        ).one()
+        return int(count or 0)
 
     @staticmethod
     def delete_notification(
@@ -154,6 +198,49 @@ class NotificationService:
             return True
         
         return False
+
+
+    @staticmethod
+    def get_or_create_preferences(
+        session: Session,
+        user_id: uuid.UUID,
+    ) -> UserNotificationPreferences:
+        """Return the persisted notification preferences for a user, creating defaults if missing."""
+        preferences = session.exec(
+            select(UserNotificationPreferences).where(
+                UserNotificationPreferences.user_id == user_id
+            )
+        ).first()
+
+        if preferences is None:
+            preferences = UserNotificationPreferences(user_id=user_id)
+            session.add(preferences)
+            session.commit()
+            session.refresh(preferences)
+
+        return preferences
+
+    @staticmethod
+    def update_preferences(
+        session: Session,
+        user_id: uuid.UUID,
+        updates: dict,
+    ) -> UserNotificationPreferences:
+        """Update persisted notification preferences for a user."""
+        preferences = NotificationService.get_or_create_preferences(
+            session=session,
+            user_id=user_id,
+        )
+
+        for key, value in updates.items():
+            if value is not None and hasattr(preferences, key):
+                setattr(preferences, key, value)
+
+        preferences.updated_at = utc_now()
+        session.add(preferences)
+        session.commit()
+        session.refresh(preferences)
+        return preferences
 
 
 def _email_user(session: Session, user_id: uuid.UUID, subject: str, message: str, html: str | None = None) -> None:
