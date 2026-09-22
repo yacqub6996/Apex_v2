@@ -5,7 +5,11 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useCallback } from 'react';
-import { NotificationsService, type NotificationsPublic } from '@/api';
+import {
+  NotificationsService,
+  type NotificationsPublic,
+  type UserNotificationPreferencesPublic,
+} from '@/api';
 import { browserNotificationService } from '@/services/browser-notification-service';
 import { useToast } from '@/providers/enhanced-toast-provider';
 
@@ -54,6 +58,16 @@ export function useNotifications(options: NotificationOptions = {}) {
     },
     refetchInterval: enablePolling ? pollingInterval : false,
   });
+
+  // Fetch persisted notification preferences (browser notifications gate)
+  const { data: preferencesData } = useQuery<UserNotificationPreferencesPublic>({
+    queryKey: ['notification-preferences'],
+    queryFn: () => NotificationsService.notificationsGetPreferences(),
+    refetchInterval: enablePolling ? pollingInterval : false,
+  });
+
+  const browserNotificationsEnabled =
+    preferencesData !== undefined && preferencesData.browser_notifications === true;
 
   // Mark notification as read
   const markAsReadMutation = useMutation({
@@ -115,7 +129,9 @@ export function useNotifications(options: NotificationOptions = {}) {
   // Show browser notification for new notifications
   useEffect(() => {
     if (!notificationsData?.data) return;
-    
+
+    if (!browserNotificationsEnabled) return;
+
     const permission = browserNotificationService.getPermissionStatus();
     if (permission !== 'granted') return;
 
@@ -142,7 +158,7 @@ export function useNotifications(options: NotificationOptions = {}) {
         );
       }
     }
-  }, [notificationsData, pollingInterval]);
+  }, [notificationsData, pollingInterval, browserNotificationsEnabled]);
 
   return {
     notifications: notificationsData?.data || [],

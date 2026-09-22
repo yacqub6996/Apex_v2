@@ -112,6 +112,8 @@ export type { NotificationPublic } from "./models/NotificationPublic";
 export type { NotificationsPublic } from "./models/NotificationsPublic";
 export { NotificationType } from "./models/NotificationType";
 export type { NotificationUpdate } from "./models/NotificationUpdate";
+export type { UserNotificationPreferencesPublic } from "./models/UserNotificationPreferencesPublic";
+export type { UserNotificationPreferencesUpdate } from "./models/UserNotificationPreferencesUpdate";
 export type { PartialReduceRequest } from "./models/PartialReduceRequest";
 export type { PendingSummary } from "./models/PendingSummary";
 export type { PendingWithdrawal } from "./models/PendingWithdrawal";

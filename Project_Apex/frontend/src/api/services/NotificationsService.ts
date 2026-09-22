@@ -8,6 +8,8 @@ import { request as __request } from "../core/request";
 import type { NotificationPublic } from "../models/NotificationPublic";
 import type { NotificationUpdate } from "../models/NotificationUpdate";
 import type { NotificationsPublic } from "../models/NotificationsPublic";
+import type { UserNotificationPreferencesPublic } from "../models/UserNotificationPreferencesPublic";
+import type { UserNotificationPreferencesUpdate } from "../models/UserNotificationPreferencesUpdate";
 
 export class NotificationsService {
     /**
@@ -97,6 +99,38 @@ export class NotificationsService {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/notifications/mark-all-read",
+        });
+    }
+    /**
+     * Get Notification Preferences
+     * Get the current user's persisted notification preferences.
+     * @returns UserNotificationPreferencesPublic Successful Response
+     * @throws ApiError
+     */
+    public static notificationsGetPreferences(): CancelablePromise<UserNotificationPreferencesPublic> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/notifications/preferences",
+        });
+    }
+    /**
+     * Update Notification Preferences
+     * Update the current user's persisted notification preferences.
+     * @param requestBody
+     * @returns UserNotificationPreferencesPublic Successful Response
+     * @throws ApiError
+     */
+    public static notificationsUpdatePreferences(
+        requestBody: UserNotificationPreferencesUpdate,
+    ): CancelablePromise<UserNotificationPreferencesPublic> {
+        return __request(OpenAPI, {
+            method: "PUT",
+            url: "/api/v1/notifications/preferences",
+            body: requestBody,
+            mediaType: "application/json",
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
 }
