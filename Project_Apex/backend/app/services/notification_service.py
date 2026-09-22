@@ -14,12 +14,17 @@ from app.models import (
     Notification,
     NotificationCreate,
     NotificationType,
-    User,
     TraderProfile,
     UserNotificationPreferences,
 )
 from app.core.time import utc_now
-from app.services.email_sender import EmailPayload, send_email, render_branded_html, get_frontend_base
+from app.services.email_sender import render_branded_html, get_frontend_base
+from app.services.notification_delivery import (
+    CATEGORY_COPY_TRADING,
+    CATEGORY_MARKET,
+    CATEGORY_WITHDRAWAL,
+    deliver_email,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -199,7 +204,6 @@ class NotificationService:
         
         return False
 
-
     @staticmethod
     def get_or_create_preferences(
         session: Session,
@@ -243,18 +247,26 @@ class NotificationService:
         return preferences
 
 
-def _email_user(session: Session, user_id: uuid.UUID, subject: str, message: str, html: str | None = None) -> None:
-    user = session.get(User, user_id)
-    if not user or not getattr(user, "email", None):
-        return
-    try:
-        send_email(EmailPayload(to=user.email, subject=subject, message=message, html=html))
-    except Exception:
-        logger.warning(
-            "email_notification_failed",
-            exc_info=True,
-            extra={"user_id": str(user_id), "subject": subject},
-        )
+def _email_user(
+    session: Session,
+    user_id: uuid.UUID,
+    subject: str,
+    message: str,
+    html: str | None = None,
+    *,
+    category: str | None = None,
+    mandatory: bool = False,
+) -> None:
+    """Route an email through the centralized notification delivery policy."""
+    deliver_email(
+        session=session,
+        user_id=user_id,
+        subject=subject,
+        message=message,
+        html=html,
+        category=category,
+        mandatory=mandatory,
+    )
 
 
 # Convenience functions for common notification types
@@ -369,6 +381,7 @@ def notify_withdrawal_approved(
         user_id,
         "Withdrawal approved",
         f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal approved",
             body=f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
@@ -403,6 +416,7 @@ def notify_withdrawal_rejected(
         user_id,
         "Withdrawal rejected",
         message,
+        category=CATEGORY_WITHDRAWAL,
         html=render_branded_html(
             title="Withdrawal rejected",
             body=message,
@@ -549,6 +563,7 @@ def notify_commission_confirmed(
         user_id,
         title,
         message,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title=title,
             body=message,
@@ -729,6 +744,7 @@ def notify_copy_trade_executed(
         user_id,
         "Copy trade executed",
         message,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title="Copy trade executed",
             body=message,
@@ -768,6 +784,7 @@ def notify_copy_relationship_started(
         user_id,
         title,
         message,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title=title,
             body=message,
@@ -833,6 +850,7 @@ def notify_copy_relationship_status_changed(
         user_id,
         title,
         base,
+        category=CATEGORY_COPY_TRADING,
         html=render_branded_html(
             title=title,
             body=base,
@@ -903,6 +921,7 @@ def email_portfolio_digest(
         user_id,
         f"{period.capitalize()} portfolio digest",
         summary,
+        category=CATEGORY_MARKET,
         html=render_branded_html(
             title=f"{period.capitalize()} portfolio digest",
             body=summary,
@@ -924,6 +943,7 @@ def email_allocation_drift(
         user_id,
         "Allocation drift alert",
         drift_summary,
+        category=CATEGORY_MARKET,
         html=render_branded_html(
             title="Allocation drift alert",
             body=drift_summary,
@@ -1139,6 +1159,7 @@ def email_engagement_nudge(
         user_id,
         title,
         body,
+        category=CATEGORY_MARKET,
         html=render_branded_html(
             title=title,
             body=body,
@@ -1197,6 +1218,7 @@ def notify_security_alert(
         user_id,
         f"Security alert: {title}",
         message,
+        mandatory=True,
         html=render_branded_html(
             title=title,
             body=message,
