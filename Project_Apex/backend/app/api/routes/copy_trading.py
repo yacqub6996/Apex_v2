@@ -103,6 +103,7 @@ def _build_trader_summary(trader: TraderProfile) -> TraderSummary:
         performance=performance,
         win_rate=win_rate,
         avatar_url=trader.avatar_url,
+        copy_fee_percentage=trader.copy_fee_percentage or 0.0,
     )
 
 
@@ -165,6 +166,7 @@ class TraderSummary(SQLModel):
     performance: str
     win_rate: str
     avatar_url: str | None = None
+    copy_fee_percentage: float = 0.0
 
     @computed_field(return_type=str, alias="traderCode")
     def trader_code_camel(self) -> str:

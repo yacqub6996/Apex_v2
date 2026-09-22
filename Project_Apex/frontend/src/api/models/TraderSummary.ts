@@ -13,6 +13,7 @@ export type TraderSummary = {
     performance: string;
     win_rate: string;
     avatar_url?: string | null;
+    copy_fee_percentage: number;
     readonly traderCode: string;
     readonly displayName: string;
     readonly riskLevel: string;

@@ -1091,6 +1091,9 @@ export const CopyTrading = () => {
                           </Box>
                           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                             {trader.specialty}
+                            {Number(trader.copy_fee_percentage) > 0
+                              ? ` · ${Number(trader.copy_fee_percentage)}% commission`
+                              : ""}
                           </Typography>
                           
                           <Box
