@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from app.core.time import utc_now
 from app.models import Transaction, TransactionStatus, TransactionType, User
-from app.services.notification_service import notify_deposit_confirmed
+from app.services.notification_service import notify_commission_confirmed, notify_deposit_confirmed
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ def finalize_deposit_transaction(
         raise ValueError("Associated user must exist to finalize deposit.")
 
     amount = float(transaction.amount or 0.0)
+    released_equity_amount = 0.0
+    commission_copy_id: str | None = None
 
     # Check if this deposit was a copy trading commission payment
     is_commission = False
@@ -61,6 +63,8 @@ def finalize_deposit_transaction(
             except Exception:
                 pass
 
+        commission_copy_id = copy_id_val
+
         if copy_id_val:
             try:
                 copy_uuid = uuid.UUID(str(copy_id_val))
@@ -84,6 +88,7 @@ def finalize_deposit_transaction(
                         current_copy_balance = float(user.copy_trading_wallet.balance or 0.0)
                         user.copy_trading_wallet.balance = round(current_copy_balance + held_amount, 2)
                         session.add(user.copy_trading_wallet)
+                        released_equity_amount = held_amount
 
                         # Update settings to guarantee exactly-once release
                         settings["equity_released"] = True
@@ -114,12 +119,21 @@ def finalize_deposit_transaction(
 
     if notify:
         try:
-            notify_deposit_confirmed(
-                session=session,
-                user_id=transaction.user_id,
-                amount=transaction.amount,
-                transaction_id=str(transaction.id),
-            )
+            if is_commission:
+                notify_commission_confirmed(
+                    session=session,
+                    user_id=transaction.user_id,
+                    amount=amount,
+                    released_equity=released_equity_amount,
+                    copy_id=commission_copy_id,
+                )
+            else:
+                notify_deposit_confirmed(
+                    session=session,
+                    user_id=transaction.user_id,
+                    amount=transaction.amount,
+                    transaction_id=str(transaction.id),
+                )
         except Exception as exc:
             logger.warning(f"Failed to send deposit confirmation notification: {exc}")
 

@@ -1319,6 +1319,8 @@ def stop_copy_relationship(
                 trader=copy.trader_profile,
                 new_status="STOPPED",
                 allocation=release_amount,
+                held_for_commission=commission_due > 0,
+                commission_due=commission_due,
             )
     except Exception:
         pass

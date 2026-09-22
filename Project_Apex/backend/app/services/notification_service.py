@@ -425,6 +425,54 @@ def notify_deposit_confirmed(
     return notif
 
 
+def notify_commission_confirmed(
+    session: Session,
+    user_id: uuid.UUID,
+    amount: float,
+    released_equity: float = 0.0,
+    copy_id: str | None = None,
+) -> Notification:
+    """Notify when a copy trading commission deposit is confirmed.
+
+    The commission itself is a standalone trader obligation and is not credited
+    to the user's Main Wallet. If held equity was released, that amount is
+    credited to the Copy Trading Wallet.
+    """
+    title = "Commission Payment Confirmed"
+    if released_equity > 0:
+        message = (
+            f"Your copy trading commission of ${amount:.2f} has been confirmed. "
+            f"${released_equity:.2f} of held equity has been released to your Copy Trading Wallet."
+        )
+    else:
+        message = f"Your copy trading commission of ${amount:.2f} has been confirmed."
+
+    notif = NotificationService.create_notification(
+        session=session,
+        user_id=user_id,
+        title=title,
+        message=message,
+        notification_type=NotificationType.COMMISSION_CONFIRMED,
+        related_entity_type="copy_relationship",
+        related_entity_id=str(copy_id) if copy_id else None,
+        action_url="/copy-trading",
+    )
+    _email_user(
+        session,
+        user_id,
+        title,
+        message,
+        html=render_branded_html(
+            title=title,
+            body=message,
+            cta_text="View copy trading",
+            cta_url=f"{get_frontend_base()}/copy-trading" if get_frontend_base() else None,
+            status="success",
+        ),
+    )
+    return notif
+
+
 def email_wallet_transfer(
     session: Session,
     user_id: uuid.UUID,
@@ -623,7 +671,7 @@ def notify_copy_relationship_started(
         user_id=user_id,
         title=title,
         message=message,
-        notification_type=NotificationType.COPY_TRADE_EXECUTED,
+        notification_type=NotificationType.COPY_RELATIONSHIP_STARTED,
         related_entity_type="copy_relationship",
         related_entity_id=str(trader.id),
         action_url="/copy-trading",
@@ -650,18 +698,37 @@ def notify_copy_relationship_status_changed(
     trader: TraderProfile,
     new_status: str,
     allocation: float | None = None,
+    held_for_commission: bool = False,
+    commission_due: float | None = None,
 ) -> Notification:
     """Notify when a copy-trading relationship is paused, resumed, or stopped."""
     trader_name = trader.display_name or trader.user.full_name if getattr(trader, "user", None) else "Trader"
-    status_label = new_status.capitalize()
+    status_upper = new_status.upper()
+    status_label = status_upper.capitalize()
     title = f"Copy relationship {status_label.lower()}"
 
+    if status_upper == "STOPPED":
+        notification_type = NotificationType.COPY_RELATIONSHIP_STOPPED
+    elif status_upper == "PAUSED":
+        notification_type = NotificationType.COPY_RELATIONSHIP_PAUSED
+    elif status_upper == "ACTIVE":
+        notification_type = NotificationType.COPY_RELATIONSHIP_RESUMED
+    else:
+        notification_type = NotificationType.COPY_TRADE_EXECUTED
+
     base = f"Your copy relationship with {trader_name} was {status_label.lower()}."
-    if new_status.upper() == "STOPPED" and allocation is not None:
-        base += f" Your copy equity of approximately ${allocation:.2f} (allocation plus PnL) has been released back to your Copy Trading Wallet."
-    elif new_status.upper() == "PAUSED":
+    if status_upper == "STOPPED" and allocation is not None:
+        if held_for_commission and commission_due is not None:
+            base += (
+                f" Your copy equity of approximately ${allocation:.2f} is being held in escrow "
+                f"pending confirmation of your ${commission_due:.2f} performance commission. "
+                "It will be released to your Copy Trading Wallet once the commission is verified."
+            )
+        else:
+            base += f" Your copy equity of approximately ${allocation:.2f} (allocation plus PnL) has been released back to your Copy Trading Wallet."
+    elif status_upper == "PAUSED":
         base += " No new trades will be copied while paused."
-    elif new_status.upper() == "ACTIVE":
+    elif status_upper == "ACTIVE":
         base += " Trades from this trader will resume being copied."
 
     notif = NotificationService.create_notification(
@@ -669,7 +736,7 @@ def notify_copy_relationship_status_changed(
         user_id=user_id,
         title=title,
         message=base,
-        notification_type=NotificationType.COPY_TRADE_EXECUTED,
+        notification_type=notification_type,
         related_entity_type="copy_relationship",
         related_entity_id=str(trader.id),
         action_url="/copy-trading",
