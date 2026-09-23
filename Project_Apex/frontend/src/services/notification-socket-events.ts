@@ -1,5 +1,5 @@
 /**
- * WebSocket notification event handling (F-04, F-05, F-16).
+ * WebSocket notification event handling (F-04, F-05, F-16, F-10/F-22 support).
  *
  * Pure, framework-free helpers for translating the Phase 7 notification
  * WebSocket frames into TanStack Query cache updates. The WebSocket provider
@@ -7,9 +7,13 @@
  * every parsed frame. REST reconciliation (invalidation) remains the fallback
  * whenever a payload is malformed or its cache correctness cannot be
  * guaranteed.
+ *
+ * Phase 8B supports two notification-list cache shapes:
+ * - Legacy single-page `NotificationsPublic` (kept for compatibility).
+ * - Infinite `InfiniteData<NotificationsPublic>` produced by `useInfiniteQuery`.
  */
 
-import type { QueryClient } from "@tanstack/react-query";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type { NotificationPublic, NotificationsPublic } from "@/api";
 import {
     isNotificationIdShown,
@@ -69,6 +73,19 @@ export function isNotificationsPublic(value: unknown): value is NotificationsPub
     return Array.isArray(list.data) && typeof list.count === "number";
 }
 
+/** Guard for the useInfiniteQuery cache shape used by the 8B notification hook. */
+export function isNotificationsInfiniteData(
+    value: unknown,
+): value is InfiniteData<NotificationsPublic> {
+    if (!value || typeof value !== "object") return false;
+    const infinite = value as Record<string, unknown>;
+    return (
+        Array.isArray(infinite.pages) &&
+        Array.isArray(infinite.pageParams) &&
+        infinite.pages.every((page) => isNotificationsPublic(page))
+    );
+}
+
 const toFiniteNumber = (value: unknown): number | undefined =>
     typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
@@ -80,22 +97,59 @@ const listLimitFromKey = (queryKey: readonly unknown[]): number | undefined =>
         ? queryKey[2]
         : undefined;
 
+type NotificationListCacheData = NotificationsPublic | InfiniteData<NotificationsPublic>;
+
+/**
+ * Visit every cached notification-list cache entry (legacy single-page or
+ * infinite) once per query key.
+ */
 const forEachNotificationListCache = (
     queryClient: QueryClient,
-    callback: (queryKey: readonly unknown[], data: NotificationsPublic) => void,
+    callback: (queryKey: readonly unknown[], data: NotificationListCacheData) => void,
 ): void => {
-    const entries = queryClient.getQueriesData<NotificationsPublic>({
+    const entries = queryClient.getQueriesData<unknown>({
         queryKey: NOTIFICATIONS_QUERY_PREFIX,
     });
     for (const [queryKey, data] of entries) {
-        if (isNotificationsPublic(data)) {
+        if (isNotificationsPublic(data) || isNotificationsInfiniteData(data)) {
             callback(queryKey, data);
         }
     }
 };
 
+/**
+ * Apply `update` to selected pages of a cache entry. `update` returns the next
+ * page or null when nothing changed. `pageIndex: "all"` visits every page of
+ * an infinite cache; a numeric index visits only that page (single-page caches
+ * are page 0). Returns the next cache entry or null when nothing changed.
+ */
+const updateCachePages = (
+    data: NotificationListCacheData,
+    pageIndex: number | "all",
+    update: (page: NotificationsPublic) => NotificationsPublic | null,
+): NotificationListCacheData | null => {
+    if (isNotificationsPublic(data)) {
+        if (pageIndex !== 0 && pageIndex !== "all") return null;
+        return update(data);
+    }
+
+    let changed = false;
+    const pages = data.pages.map((page, index) => {
+        if (pageIndex !== "all" && index !== pageIndex) return page;
+        const next = update(page);
+        if (next === null) return page;
+        changed = true;
+        return next;
+    });
+    return changed ? { ...data, pages } : null;
+};
+
+const setQueryData = <TData>(queryClient: QueryClient, queryKey: readonly unknown[], data: TData): void => {
+    queryClient.setQueryData<TData>(queryKey, data);
+};
+
 const updateUnreadCountCache = (queryClient: QueryClient, count: number): void => {
-    queryClient.setQueryData(UNREAD_COUNT_QUERY_KEY, { count });
+    setQueryData(queryClient, UNREAD_COUNT_QUERY_KEY, { count });
 };
 
 const upsertNotification = (
@@ -104,22 +158,23 @@ const upsertNotification = (
     unreadCount: number | undefined,
 ): void => {
     forEachNotificationListCache(queryClient, (queryKey, data) => {
-        // Idempotency guard: the REST refetch after invalidation may already
-        // contain this row. Never insert duplicates.
-        if (data.data.some((item) => item.id === notification.id)) return;
+        const next = updateCachePages(data, 0, (page) => {
+            // Idempotency guard: the REST refetch after invalidation may already
+            // contain this row. Never insert duplicates.
+            if (page.data.some((item) => item.id === notification.id)) return null;
 
-        // Unread-only list caches must not receive read notifications.
-        if (isUnreadOnlyKey(queryKey) && notification.is_read) return;
+            // Unread-only list caches must not receive read notifications.
+            if (isUnreadOnlyKey(queryKey) && notification.is_read) return null;
 
-        const nextData = [notification, ...data.data];
-        const limit = listLimitFromKey(queryKey);
-        if (limit !== undefined && nextData.length > limit) {
-            nextData.length = limit;
-        }
-        queryClient.setQueryData<NotificationsPublic>(queryKey, {
-            data: nextData,
-            count: data.count + 1,
+            const nextData = [notification, ...page.data];
+            const limit = listLimitFromKey(queryKey);
+            // Never grow a cached page beyond its configured limit.
+            if (limit !== undefined && nextData.length > limit) {
+                nextData.length = limit;
+            }
+            return { data: nextData, count: page.count + 1 };
         });
+        if (next) setQueryData(queryClient, queryKey, next);
     });
 
     if (unreadCount !== undefined) {
@@ -134,36 +189,31 @@ const applyReadState = (
     unreadCount: number | undefined,
 ): void => {
     forEachNotificationListCache(queryClient, (queryKey, data) => {
-        if (isUnreadOnlyKey(queryKey)) {
-            // Marking read removes the row from unread-only caches.
-            if (isRead) {
-                const nextData = data.data.filter((item) => item.id !== notificationId);
-                if (nextData.length !== data.data.length) {
-                    queryClient.setQueryData<NotificationsPublic>(queryKey, {
-                        data: nextData,
-                        count: Math.max(0, data.count - (data.data.length - nextData.length)),
-                    });
-                }
+        const next = updateCachePages(data, "all", (page) => {
+            if (isUnreadOnlyKey(queryKey)) {
+                // Marking read removes the row from unread-only caches.
+                if (!isRead) return null;
+                const nextData = page.data.filter((item) => item.id !== notificationId);
+                if (nextData.length === page.data.length) return null;
+                return {
+                    data: nextData,
+                    count: Math.max(0, page.count - (page.data.length - nextData.length)),
+                };
             }
-            return;
-        }
 
-        let changed = false;
-        const nextData = data.data.map((item) => {
-            if (item.id !== notificationId) return item;
-            changed = true;
-            return {
-                ...item,
-                is_read: isRead,
-                read_at: isRead ? new Date().toISOString() : null,
-            };
-        });
-        if (changed) {
-            queryClient.setQueryData<NotificationsPublic>(queryKey, {
-                ...data,
-                data: nextData,
+            let changed = false;
+            const nextData = page.data.map((item) => {
+                if (item.id !== notificationId) return item;
+                changed = true;
+                return {
+                    ...item,
+                    is_read: isRead,
+                    read_at: isRead ? new Date().toISOString() : null,
+                };
             });
-        }
+            return changed ? { ...page, data: nextData } : null;
+        });
+        if (next) setQueryData(queryClient, queryKey, next);
     });
 
     if (unreadCount !== undefined) {
@@ -173,15 +223,18 @@ const applyReadState = (
 
 const applyReadAll = (queryClient: QueryClient, unreadCount: number | undefined): void => {
     forEachNotificationListCache(queryClient, (queryKey, data) => {
-        if (isUnreadOnlyKey(queryKey)) {
-            queryClient.setQueryData<NotificationsPublic>(queryKey, { data: [], count: 0 });
-            return;
-        }
-
-        const nextData = data.data.map((item) =>
-            item.is_read ? item : { ...item, is_read: true, read_at: new Date().toISOString() },
-        );
-        queryClient.setQueryData<NotificationsPublic>(queryKey, { ...data, data: nextData });
+        const next = updateCachePages(data, "all", (page) => {
+            if (isUnreadOnlyKey(queryKey)) {
+                return { data: [], count: 0 };
+            }
+            const nextData = page.data.map((item) =>
+                item.is_read
+                    ? item
+                    : { ...item, is_read: true, read_at: new Date().toISOString() },
+            );
+            return { ...page, data: nextData };
+        });
+        if (next) setQueryData(queryClient, queryKey, next);
     });
 
     if (unreadCount !== undefined) {
@@ -195,18 +248,45 @@ const applyDelete = (
     unreadCount: number | undefined,
 ): void => {
     forEachNotificationListCache(queryClient, (queryKey, data) => {
-        const nextData = data.data.filter((item) => item.id !== notificationId);
-        if (nextData.length === data.data.length) return;
-        queryClient.setQueryData<NotificationsPublic>(queryKey, {
-            data: nextData,
-            count: Math.max(0, data.count - (data.data.length - nextData.length)),
+        const next = updateCachePages(data, "all", (page) => {
+            const nextData = page.data.filter((item) => item.id !== notificationId);
+            if (nextData.length === page.data.length) return null;
+            return {
+                data: nextData,
+                count: Math.max(0, page.count - (page.data.length - nextData.length)),
+            };
         });
+        if (next) setQueryData(queryClient, queryKey, next);
     });
 
     if (unreadCount !== undefined) {
         updateUnreadCountCache(queryClient, unreadCount);
     }
 };
+
+/**
+ * Optimistic cache transform used by `markAllAsRead`: flips every cached
+ * notification row to read, empties unread-only caches, and zeroes the
+ * unread-count cache. The caller snapshots the previous cache state and
+ * restores it on mutation failure.
+ */
+export function markAllNotificationCachesRead(queryClient: QueryClient): void {
+    forEachNotificationListCache(queryClient, (queryKey, data) => {
+        const next = updateCachePages(data, "all", (page) => {
+            if (isUnreadOnlyKey(queryKey)) {
+                return { data: [], count: 0 };
+            }
+            const nextData = page.data.map((item) =>
+                item.is_read
+                    ? item
+                    : { ...item, is_read: true, read_at: new Date().toISOString() },
+            );
+            return { ...page, data: nextData };
+        });
+        if (next) setQueryData(queryClient, queryKey, next);
+    });
+    updateUnreadCountCache(queryClient, 0);
+}
 
 const maybeShowBrowserNotification = (
     notification: NotificationPublic,
@@ -221,10 +301,10 @@ const maybeShowBrowserNotification = (
 /**
  * Apply a parsed notification WebSocket message to the query cache.
  *
- * - `notification.new` is upserted directly into every matching list cache and
- *   may surface a browser notification exactly once per notification id.
+ * - `notification.new` is upserted directly into page one of every matching
+ *   list cache and may surface a browser notification exactly once per id.
  * - `notification.read`, `notifications.read_all`, and `notification.deleted`
- *   are applied as targeted cache updates so the provider does not redundantly
+ *   are applied across cached pages so the provider does not redundantly
  *   invalidate queries that the local mutations already reconcile.
  * - Any malformed payload or unknown event type falls back to REST
  *   reconciliation via invalidation.

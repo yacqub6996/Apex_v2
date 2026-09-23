@@ -1,320 +1,110 @@
-import { useState } from 'react';
+/**
+ * NotificationCenter — responsive notification bell + surface orchestrator.
+ *
+ * - Desktop/tablet (sm+): compact anchored MUI Menu popover (retained).
+ * - Mobile (xs): bottom-anchored MUI Drawer sheet with scrim.
+ *
+ * Both surfaces render the same NotificationCenterContent and share a single
+ * `useNotifications` instance so no business logic is duplicated (F-07/F-08).
+ */
+import { useState } from "react";
+import { Badge, IconButton, Menu, useMediaQuery, useTheme } from "@mui/material";
+import { Notifications as NotificationsIcon } from "@mui/icons-material";
+import { useNotifications } from "@/hooks/use-notifications";
 import {
-  Badge,
-  IconButton,
-  Menu,
-  MenuItem,
-  Box,
-  Typography,
-  Divider,
-  Button,
-  CircularProgress,
-  Chip,
-  ListItemText,
-  ListItemIcon,
-} from '@mui/material';
-import {
-  Notifications as NotificationsIcon,
-  CheckCircle,
-  Error,
-  Info,
-  Warning,
-  Delete,
-  DoneAll,
-} from '@mui/icons-material';
-import { useNotifications } from '@/hooks/use-notifications';
-import { formatDistanceToNow } from 'date-fns';
-import type { NotificationPublic } from '@/api';
-import { useNavigate } from '@tanstack/react-router';
-import { resolveNotificationActionUrl } from '@/utils/notification-routes';
-
-const getNotificationIcon = (type: string) => {
-  switch (type) {
-    case 'KYC_APPROVED':
-    case 'WITHDRAWAL_APPROVED':
-    case 'DEPOSIT_CONFIRMED':
-    case 'ROI_RECEIVED':
-    case 'INVESTMENT_MATURED':
-      return <CheckCircle color="success" />;
-    case 'KYC_REJECTED':
-    case 'WITHDRAWAL_REJECTED':
-      return <Error color="error" />;
-    case 'SECURITY_ALERT':
-      return <Warning color="warning" />;
-    default:
-      return <Info color="info" />;
-  }
-};
-
-const getNotificationColor = (type: string) => {
-  switch (type) {
-    case 'KYC_APPROVED':
-    case 'WITHDRAWAL_APPROVED':
-    case 'DEPOSIT_CONFIRMED':
-    case 'ROI_RECEIVED':
-    case 'INVESTMENT_MATURED':
-      return 'success';
-    case 'KYC_REJECTED':
-    case 'WITHDRAWAL_REJECTED':
-      return 'error';
-    case 'SECURITY_ALERT':
-      return 'warning';
-    default:
-      return 'info';
-  }
-};
+    NotificationCenterContent,
+    type NotificationFilter,
+} from "@/components/notifications/notification-center-content";
+import { MobileNotificationSheet } from "@/components/notifications/mobile-notification-sheet";
 
 export const NotificationCenter = () => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-  const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [filter, setFilter] = useState<NotificationFilter>("all");
 
-  const {
-    notifications,
-    unreadCount,
-    isLoading,
-    markAsReadAsync,
-    markAllAsRead,
-    deleteNotification,
-  } = useNotifications({
-    unreadOnly: false,
-    limit: 20,
-    enablePolling: true,
-  });
+    const notificationsState = useNotifications({
+        unreadOnly: filter === "unread",
+        limit: 20,
+        enablePolling: true,
+    });
 
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
+    const desktopOpen = Boolean(anchorEl);
+    const surfaceOpen = isMobile ? mobileOpen : desktopOpen;
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+    const handleBellClick = (event: React.MouseEvent<HTMLElement>) => {
+        if (isMobile) {
+            setMobileOpen(true);
+            return;
+        }
+        setAnchorEl(event.currentTarget);
+    };
 
-  const handleNotificationClick = (notification: NotificationPublic) => {
-    const target = resolveNotificationActionUrl(notification.action_url);
+    const handleClose = () => {
+        setAnchorEl(null);
+        setMobileOpen(false);
+    };
 
-    // Close the menu immediately so the UI responds before the read request
-    // completes; the read mutation continues across SPA navigation.
-    handleClose();
+    const handleFilterChange = (nextFilter: NotificationFilter) => {
+        setFilter(nextFilter);
+    };
 
-    if (!notification.is_read) {
-      // Await the PATCH so the read state reliably persists before we leave
-      // the current route. Navigation still proceeds if the PATCH fails:
-      // polling/WebSocket reconciliation remains the authoritative fallback.
-      void markAsReadAsync(notification.id)
-        .catch(() => {
-          // Read-state reconciliation continues via polling/WebSocket.
-        })
-        .finally(() => {
-          if (target) {
-            void navigate({ to: target.to, search: target.search });
-          }
-        });
-      return;
-    }
+    const surfaceId = isMobile ? "notification-mobile-sheet" : "notification-menu";
 
-    if (target) {
-      void navigate({ to: target.to, search: target.search });
-    }
-  };
-
-  const handleMarkAllRead = () => {
-    markAllAsRead();
-  };
-
-  const handleDeleteNotification = (
-    event: React.MouseEvent,
-    notificationId: string
-  ) => {
-    event.stopPropagation();
-    deleteNotification(notificationId);
-  };
-
-  return (
-    <>
-      <IconButton
-        onClick={handleClick}
-        size="large"
-        aria-label={`${unreadCount} unread notifications`}
-        aria-controls={open ? 'notification-menu' : undefined}
-        aria-haspopup="true"
-        aria-expanded={open ? 'true' : undefined}
-        sx={{ color: 'text.primary' }}
-      >
-        <Badge badgeContent={unreadCount} color="error">
-          <NotificationsIcon />
-        </Badge>
-      </IconButton>
-
-      <Menu
-        id="notification-menu"
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        PaperProps={{
-          sx: {
-            width: { xs: '92vw', sm: 400 },
-            maxHeight: '70vh',
-            mt: 1.5,
-            mx: { xs: 1, sm: 0 },
-          },
-        }}
-        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-      >
-        {/* Header */}
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Typography variant="h6" component="div">
-            Notifications
-          </Typography>
-          {unreadCount > 0 && (
-            <Button
-              size="small"
-              startIcon={<DoneAll />}
-              onClick={handleMarkAllRead}
-              sx={{ textTransform: 'none' }}
+    return (
+        <>
+            <IconButton
+                onClick={handleBellClick}
+                size="large"
+                aria-label={`${notificationsState.unreadCount} unread notifications`}
+                aria-controls={surfaceId}
+                aria-haspopup={isMobile ? "dialog" : "true"}
+                aria-expanded={surfaceOpen ? "true" : "false"}
+                sx={{ color: "text.primary" }}
             >
-              Mark all read
-            </Button>
-          )}
-        </Box>
+                <Badge badgeContent={notificationsState.unreadCount} color="error">
+                    <NotificationsIcon />
+                </Badge>
+            </IconButton>
 
-        <Divider />
-
-        {/* Notification List */}
-        <Box sx={{ maxHeight: 480, overflow: 'auto' }}>
-          {isLoading ? (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                py: 4,
-              }}
-            >
-              <CircularProgress size={24} />
-            </Box>
-          ) : notifications.length === 0 ? (
-            <Box sx={{ py: 4, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                No notifications yet
-              </Typography>
-            </Box>
-          ) : (
-            notifications.map((notification) => (
-              <MenuItem
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 1.5,
-                  backgroundColor: notification.is_read
-                    ? 'transparent'
-                    : 'action.hover',
-                  '&:hover': {
-                    backgroundColor: notification.is_read
-                      ? 'action.hover'
-                      : 'action.selected',
-                  },
+            <Menu
+                id="notification-menu"
+                anchorEl={anchorEl}
+                open={desktopOpen}
+                onClose={handleClose}
+                PaperProps={{
+                    sx: {
+                        width: 400,
+                        maxWidth: "calc(100vw - 32px)",
+                        maxHeight: "min(560px, calc(100vh - 96px))",
+                        mt: 1.5,
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                    },
                 }}
-              >
-                <ListItemIcon sx={{ minWidth: 'auto', mt: 0.5 }}>
-                  {getNotificationIcon(notification.notification_type)}
-                </ListItemIcon>
-
-                <ListItemText
-                  sx={{ flex: 1 }}
-                  primary={
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        mb: 0.5,
-                      }}
-                    >
-                      <Typography
-                        variant="subtitle2"
-                        sx={{
-                          fontWeight: notification.is_read ? 400 : 600,
-                          flex: 1,
-                        }}
-                      >
-                        {notification.title}
-                      </Typography>
-                      {!notification.is_read && (
-                        <Chip
-                          label="New"
-                          size="small"
-                          color={getNotificationColor(notification.notification_type) as any}
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      )}
-                    </Box>
-                  }
-                  secondary={
-                    <>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mb: 0.5 }}
-                      >
-                        {notification.message}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDistanceToNow(new Date(notification.created_at), {
-                          addSuffix: true,
-                        })}
-                      </Typography>
-                    </>
-                  }
+                transformOrigin={{ horizontal: "right", vertical: "top" }}
+                anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+                <NotificationCenterContent
+                    isMobile={false}
+                    onClose={handleClose}
+                    filter={filter}
+                    onFilterChange={handleFilterChange}
+                    notificationsState={notificationsState}
                 />
+            </Menu>
 
-                <IconButton
-                  size="small"
-                  onClick={(e) =>
-                    handleDeleteNotification(e, notification.id)
-                  }
-                  sx={{ mt: 0.5 }}
-                >
-                  <Delete fontSize="small" />
-                </IconButton>
-              </MenuItem>
-            ))
-          )}
-        </Box>
-
-        {/* Footer */}
-        {notifications.length > 0 && (
-          <>
-            <Divider />
-            <Box sx={{ p: 1, textAlign: 'center' }}>
-              <Button
-                fullWidth
-                size="small"
-                onClick={() => {
-                  handleClose();
-                  void navigate({ to: '/dashboard/settings', search: { tab: 'notifications' } });
-                }}
-                sx={{ textTransform: 'none' }}
-              >
-                Notification Settings
-              </Button>
-            </Box>
-          </>
-        )}
-      </Menu>
-    </>
-  );
+            <MobileNotificationSheet open={mobileOpen} onClose={handleClose}>
+                <NotificationCenterContent
+                    isMobile
+                    onClose={handleClose}
+                    filter={filter}
+                    onFilterChange={handleFilterChange}
+                    notificationsState={notificationsState}
+                />
+            </MobileNotificationSheet>
+        </>
+    );
 };

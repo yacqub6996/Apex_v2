@@ -14,22 +14,25 @@ import type { UserNotificationPreferencesUpdate } from "../models/UserNotificati
 export class NotificationsService {
     /**
      * Get Notifications
-     * Get current user's notifications.
+     * Get current user's notifications (newest first, safely paginated).
      *
      * - **unread_only**: If True, only return unread notifications
-     * - **limit**: Maximum number of notifications to return (default: 50)
+     * - **limit**: Maximum number of notifications to return (default: 50, max: 100)
+     * - **offset**: Number of notifications to skip (default: 0)
      * @param unreadOnly
      * @param limit
+     * @param offset
      * @returns NotificationsPublic Successful Response
      * @throws ApiError
      */
-    public static notificationsGetNotifications(unreadOnly: boolean = false, limit: number = 50): CancelablePromise<NotificationsPublic> {
+    public static notificationsGetNotifications(unreadOnly: boolean = false, limit: number = 50, offset: number = 0): CancelablePromise<NotificationsPublic> {
         return __request(OpenAPI, {
             method: "GET",
             url: "/api/v1/notifications/",
             query: {
                 unread_only: unreadOnly,
                 limit: limit,
+                offset: offset,
             },
             errors: {
                 422: `Validation Error`,
