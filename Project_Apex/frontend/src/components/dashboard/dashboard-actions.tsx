@@ -6,13 +6,18 @@ import { DepositModal } from "@/components/crypto/deposit/DepositModal";
 import { WithdrawalModal } from "@/components/crypto/withdrawal/WithdrawalModal";
 import { toast } from "react-toastify";
 
+interface DashboardActionsProps {
+    /** When false, only the Deposit action is rendered. */
+    showWithdraw?: boolean;
+}
+
 /**
  * DashboardActions - Deposit and Withdraw buttons with dialog forms
  * 
  * This component provides the primary action buttons for the dashboard header,
  * allowing users to deposit funds into or withdraw funds from the platform.
  */
-export const DashboardActions = () => {
+export const DashboardActions = ({ showWithdraw = true }: DashboardActionsProps) => {
     const [depositModalOpen, setDepositModalOpen] = useState(false);
     const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
 
@@ -39,18 +44,20 @@ export const DashboardActions = () => {
             >
                 Deposit
             </Button>
-            <Button
-                variant="outlined"
-                size="small"
-                startIcon={<ArrowUpwardIcon />}
-                onClick={() => setWithdrawDialogOpen(true)}
-                sx={{
-                    textTransform: "none",
-                    fontWeight: 600,
-                }}
-            >
-                Withdraw
-            </Button>
+            {showWithdraw && (
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ArrowUpwardIcon />}
+                    onClick={() => setWithdrawDialogOpen(true)}
+                    sx={{
+                        textTransform: "none",
+                        fontWeight: 600,
+                    }}
+                >
+                    Withdraw
+                </Button>
+            )}
 
             {/* Deposit Modal */}
             <DepositModal
@@ -60,12 +67,14 @@ export const DashboardActions = () => {
             />
 
             {/* Withdraw Modal */}
-            <WithdrawalModal
-                open={withdrawDialogOpen}
-                onClose={() => setWithdrawDialogOpen(false)}
-                onSuccess={handleWithdrawSuccess}
-                walletType="main"
-            />
+            {showWithdraw && (
+                <WithdrawalModal
+                    open={withdrawDialogOpen}
+                    onClose={() => setWithdrawDialogOpen(false)}
+                    onSuccess={handleWithdrawSuccess}
+                    walletType="main"
+                />
+            )}
         </Box>
     );
 };

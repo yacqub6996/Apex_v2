@@ -33,6 +33,7 @@ import type { DailyPerformancePublic } from "@/api/models/DailyPerformancePublic
 import { TransactionsService } from "@/api/services/TransactionsService";
 import { CopyTradingService } from "@/api/services/CopyTradingService";
 import { MaterialDashboardLayout, type MaterialDashboardNavItem } from "@/components/layouts/material-dashboard";
+import { DashboardActions } from "@/components/dashboard/dashboard-actions";
 import { CopyTradingHistory } from "@/components/dashboard/copy-trading-history";
 import { ActiveCopyPositionsImproved } from "@/components/dashboard/active-copy-positions-improved";
 import { ROIChart } from "@/components/dashboard/roi-chart";
@@ -41,6 +42,7 @@ import { MetricCard, Panel, StatCardSkeleton, TableSkeleton } from "@/components
 import { Link } from "@tanstack/react-router";
 import { toAbsoluteResource } from "@/utils/url";
 import { useDashboardStore } from "@/stores/dashboard-store";
+import { useModalSuppression } from "@/stores/support-widget-store";
 import { formatCurrencyByPreference } from "@/utils/currency";
 import { DASHBOARD_GRID_SPACING } from "@/constants/layout";
 import { PendingDepositsBanner } from "@/components/dashboard/pending-deposits-banner";
@@ -57,6 +59,10 @@ export const UserDashboard = ({ children }: { children?: ReactNode }) => {
     const normalizedPathname =
         pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
     const isRootDashboard = normalizedPathname === "/dashboard";
+
+    // Suppress the floating support chat widget while on dashboard routes.
+    // The full Support page remains available via the sidebar navigation.
+    useModalSuppression();
 
     // Get currency preference from store
     const preferredCurrency = useDashboardStore((s) => s.preferredCurrency);
@@ -911,7 +917,7 @@ export const UserDashboard = ({ children }: { children?: ReactNode }) => {
 
     const layoutActions = !isRootDashboard
         ? null
-        : (isLoading ? <Skeleton variant="rectangular" width={96} height={28} sx={{ borderRadius: 1.5 }} /> : undefined);
+        : (isLoading ? <Skeleton variant="rectangular" width={96} height={28} sx={{ borderRadius: 1.5 }} /> : <DashboardActions showWithdraw={false} />);
 
     const headerTitle = useMemo(() => {
         if (pathname.startsWith("/dashboard/account")) return "Account Overview";
