@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import uuid
 from typing import Annotated
 
 import jwt
@@ -65,4 +66,21 @@ def get_current_active_superuser(current_user: CurrentUser) -> User:
             status_code=403, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+
+def resolve_ws_user_id(token: str) -> uuid.UUID | None:
+    """Resolve a WebSocket access token to an active user id, or None."""
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
+        )
+        token_data = TokenPayload(**payload)
+    except (InvalidTokenError, ValidationError):
+        return None
+
+    with Session(engine) as session:
+        user = session.get(User, token_data.sub)
+        if not user or not user.is_active:
+            return None
+        return user.id
 

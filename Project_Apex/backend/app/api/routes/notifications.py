@@ -4,10 +4,10 @@ Notification API routes
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlmodel import Session
 
-from app.api.deps import CurrentUser, get_db
+from app.api.deps import CurrentUser, get_db, resolve_ws_user_id
 from app.models import (
     NotificationPublic,
     NotificationsPublic,
@@ -16,6 +16,7 @@ from app.models import (
     UserNotificationPreferencesUpdate,
 )
 from app.services.notification_service import NotificationService
+from app.services.notification_socket import notification_socket_manager
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -168,3 +169,32 @@ def delete_notification(
         )
     
     return {"success": True}
+
+
+@router.websocket("/ws")
+async def notifications_websocket(
+    websocket: WebSocket,
+    token: str = Query(""),
+) -> None:
+    """Authenticated WebSocket for realtime notification events.
+
+    Connect with ``/api/v1/notifications/ws?token=<access_token>``.
+    """
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    user_id = resolve_ws_user_id(token)
+    if user_id is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    connection = await notification_socket_manager.connect(user_id, websocket)
+    try:
+        while True:
+            # Client messages are ignored; the server pushes events and pings.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        notification_socket_manager.disconnect(user_id, connection)

@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { MaterialThemeProvider } from "@/providers/material-theme-provider";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 import { EnhancedToastProvider } from "@/providers/enhanced-toast-provider";
+import { NotificationSocketProvider } from "@/providers/notification-socket-provider";
 import { AuthErrorBoundary } from "@/components/auth/error-boundary";
 import { FloatingSupportWidget } from "@/components/support-widget";
 import "@/api/client-config";
@@ -44,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
                     <ThemeProvider defaultTheme="dark">
                         <MaterialThemeProvider>
                             <EnhancedToastProvider>
+                                <NotificationSocketProvider>
                                 {googleClientId ? (
                                     <GoogleOAuthProvider clientId={googleClientId}>
                                         <RouterProvider router={router} />
@@ -58,6 +60,7 @@ createRoot(document.getElementById("root")!).render(
                                         <ConditionalSupportWidget />
                                     </>
                                 )}
+                                </NotificationSocketProvider>
                             </EnhancedToastProvider>
                         </MaterialThemeProvider>
                     </ThemeProvider>

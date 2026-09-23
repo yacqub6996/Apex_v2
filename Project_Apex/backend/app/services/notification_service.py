@@ -26,9 +26,52 @@ from app.services.notification_delivery import (
     CATEGORY_WITHDRAWAL,
     deliver_email,
 )
+from app.services.notification_socket import notification_socket_manager
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _notification_payload(notification: Notification) -> dict:
+    """Serialize a Notification for the WebSocket channel."""
+    return {
+        "id": str(notification.id),
+        "user_id": str(notification.user_id),
+        "title": notification.title,
+        "message": notification.message,
+        "notification_type": (
+            notification.notification_type.value
+            if hasattr(notification.notification_type, "value")
+            else str(notification.notification_type)
+        ),
+        "related_entity_type": notification.related_entity_type,
+        "related_entity_id": (
+            str(notification.related_entity_id)
+            if notification.related_entity_id is not None
+            else None
+        ),
+        "action_url": notification.action_url,
+        "is_read": notification.is_read,
+        "read_at": notification.read_at.isoformat() if notification.read_at else None,
+        "created_at": (
+            notification.created_at.isoformat() if notification.created_at else None
+        ),
+    }
+
+
+def _emit_notification_event(user_id: uuid.UUID, event_type: str, payload: dict) -> None:
+    """Fan a notification event out to the user's live sockets (fire-and-forget)."""
+    try:
+        notification_socket_manager.send_to_user(
+            user_id,
+            {"type": event_type, "payload": payload},
+        )
+    except Exception:
+        logger.warning(
+            "notification_socket_emit_failed",
+            exc_info=True,
+            extra={"user_id": str(user_id), "event_type": event_type},
+        )
 
 
 class NotificationService:
@@ -116,12 +159,24 @@ class NotificationService:
             idempotency_key=idempotency_key,
         )
         session.add(notification)
-        return NotificationService._commit_or_recover(
+        committed, created = NotificationService._commit_or_recover(
             session=session,
             notification=notification,
             user_id=user_id,
             idempotency_key=idempotency_key,
         )
+        if created:
+            _emit_notification_event(
+                user_id,
+                "notification.new",
+                {
+                    "notification": _notification_payload(committed),
+                    "unread_count": NotificationService.get_unread_count(
+                        session, user_id
+                    ),
+                },
+            )
+        return committed, created
 
     @staticmethod
     def _commit_or_recover(
@@ -214,6 +269,17 @@ class NotificationService:
             session.add(notification)
             session.commit()
             session.refresh(notification)
+            _emit_notification_event(
+                user_id,
+                "notification.read",
+                {
+                    "notification_id": str(notification.id),
+                    "is_read": notification.is_read,
+                    "unread_count": NotificationService.get_unread_count(
+                        session, user_id
+                    ),
+                },
+            )
             return notification
 
         return None
@@ -253,6 +319,16 @@ class NotificationService:
             count += 1
         
         session.commit()
+        _emit_notification_event(
+            user_id,
+            "notifications.read_all",
+            {
+                "marked_read": count,
+                "unread_count": NotificationService.get_unread_count(
+                    session, user_id
+                ),
+            },
+        )
         return count
 
     @staticmethod
@@ -283,6 +359,16 @@ class NotificationService:
         if notification and notification.user_id == user_id:
             session.delete(notification)
             session.commit()
+            _emit_notification_event(
+                user_id,
+                "notification.deleted",
+                {
+                    "notification_id": str(notification_id),
+                    "unread_count": NotificationService.get_unread_count(
+                        session, user_id
+                    ),
+                },
+            )
             return True
         
         return False
