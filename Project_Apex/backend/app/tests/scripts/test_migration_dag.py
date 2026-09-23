@@ -16,12 +16,27 @@ def test_migration_dag_single_head() -> None:
         len(heads) == 1
     ), f"Expected exactly 1 migration head, found {len(heads)}: {heads}"
     head_rev = heads[0]
-    assert head_rev == "20260920_main_wallet_enum", f"Unexpected head revision: {head_rev}"
+    assert head_rev == "20260922_notification_idemp", f"Unexpected head revision: {head_rev}"
 
     all_revs = {r.revision for r in script.walk_revisions()}
     assert (
         "20260920_main_wallet_enum" in all_revs
     ), "Forward migration 20260920_main_wallet_enum missing"
+    assert (
+        "20260922_notification_prefs" in all_revs
+    ), "Forward migration 20260922_notification_prefs missing"
+    assert (
+        "20260922_notification_idemp" in all_revs
+    ), "Forward migration 20260922_notification_idemp missing"
+
+    preferences = script.get_revision("20260922_notification_prefs")
+    assert (
+        preferences.down_revision == "20260920_main_wallet_enum"
+    ), "Notification preferences migration must follow 20260920_main_wallet_enum"
+    idempotency = script.get_revision("20260922_notification_idemp")
+    assert (
+        idempotency.down_revision == "20260922_notification_prefs"
+    ), "Notification idempotency migration must follow 20260922_notification_prefs"
     assert (
         "20260918_metadata_tx" in all_revs
     ), "Production repaired revision 20260918_metadata_tx missing"

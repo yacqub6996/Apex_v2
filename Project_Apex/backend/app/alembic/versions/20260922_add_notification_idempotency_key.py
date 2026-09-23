@@ -1,7 +1,7 @@
 """add notification idempotency key
 
-Revision ID: 20260922_notification_idempotency
-Revises: 20260922_notification_preferences
+Revision ID: 20260922_notification_idemp
+Revises: 20260922_notification_prefs
 Create Date: 2026-09-22 22:05:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20260922_notification_idempotency"
-down_revision = "20260922_notification_preferences"
+revision = "20260922_notification_idemp"
+down_revision = "20260922_notification_prefs"
 branch_labels = None
 depends_on = None
 

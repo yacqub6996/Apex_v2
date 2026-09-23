@@ -1,6 +1,6 @@
 """add persisted notification preferences table
 
-Revision ID: 20260922_notification_preferences
+Revision ID: 20260922_notification_prefs
 Revises: 20260920_main_wallet_enum
 Create Date: 2026-09-22 20:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20260922_notification_preferences"
+revision = "20260922_notification_prefs"
 down_revision = "20260920_main_wallet_enum"
 branch_labels = None
 depends_on = None
