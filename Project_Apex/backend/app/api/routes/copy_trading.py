@@ -855,6 +855,7 @@ async def fund_wallet(
         amount=amount,
         from_wallet="Main",
         to_wallet="Copy Trading",
+        transaction_id=str(transaction.id),
     )
 
     return FundWalletResponse(

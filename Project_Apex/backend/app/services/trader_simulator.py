@@ -436,6 +436,7 @@ class TraderSimulator:
                     symbol=trader_trade.symbol,
                     side=trader_trade.side.value,
                     amount=round(scaled_profit_loss, 2),
+                    trade_id=str(follower_trade.id),
                 )
             except Exception as e:
                 logger.warning(f"Failed to send trade notification to user {user.id}: {e}")

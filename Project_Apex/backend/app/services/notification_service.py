@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Session, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.models import (
     Notification,
@@ -43,8 +44,55 @@ class NotificationService:
         related_entity_type: Optional[str] = None,
         related_entity_id: Optional[str] = None,
         action_url: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> Notification:
-        """Create a new notification for a user"""
+        """Create a new notification for a user.
+
+        When ``idempotency_key`` is provided, an existing notification for the
+        same (user, key) pair is returned instead of creating a duplicate.
+        """
+        notification, _created = NotificationService.create_notification_idempotent(
+            session=session,
+            user_id=user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            related_entity_type=related_entity_type,
+            related_entity_id=related_entity_id,
+            action_url=action_url,
+            idempotency_key=idempotency_key,
+        )
+        return notification
+
+    @staticmethod
+    def create_notification_idempotent(
+        session: Session,
+        user_id: uuid.UUID,
+        title: str,
+        message: str,
+        notification_type: NotificationType,
+        related_entity_type: Optional[str] = None,
+        related_entity_id: Optional[str] = None,
+        action_url: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> tuple[Notification, bool]:
+        """Create a notification and report whether a new row was inserted.
+
+        Returns ``(notification, True)`` when a new notification was created and
+        ``(notification, False)`` when an existing notification matched the
+        idempotency key. Callers should only deliver optional channels (email)
+        when the second element is True to avoid duplicate email sends.
+        """
+        if idempotency_key:
+            existing = session.exec(
+                select(Notification).where(
+                    Notification.user_id == user_id,
+                    Notification.idempotency_key == idempotency_key,
+                )
+            ).first()
+            if existing is not None:
+                return existing, False
+
         parsed_entity_id = None
         if related_entity_id is not None:
             if isinstance(related_entity_id, uuid.UUID):
@@ -65,11 +113,46 @@ class NotificationService:
             action_url=action_url,
             is_read=False,
             created_at=utc_now(),
+            idempotency_key=idempotency_key,
         )
         session.add(notification)
-        session.commit()
+        return NotificationService._commit_or_recover(
+            session=session,
+            notification=notification,
+            user_id=user_id,
+            idempotency_key=idempotency_key,
+        )
+
+    @staticmethod
+    def _commit_or_recover(
+        session: Session,
+        notification: Notification,
+        user_id: uuid.UUID,
+        idempotency_key: Optional[str],
+    ) -> tuple[Notification, bool]:
+        """Commit a new notification, recovering from a unique-constraint race.
+
+        The database UNIQUE(user_id, idempotency_key) constraint is the final
+        authority. When a concurrent insert wins the race, the losing commit
+        raises IntegrityError; the session is rolled back and the winner is
+        re-read and returned with created=False.
+        """
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            if idempotency_key:
+                existing = session.exec(
+                    select(Notification).where(
+                        Notification.user_id == user_id,
+                        Notification.idempotency_key == idempotency_key,
+                    )
+                ).first()
+                if existing is not None:
+                    return existing, False
+            raise
         session.refresh(notification)
-        return notification
+        return notification, True
 
     @staticmethod
     def get_user_notifications(
@@ -366,7 +449,8 @@ def notify_withdrawal_approved(
     transaction_id: str,
 ) -> Notification:
     """Send notification when withdrawal is approved"""
-    notif = NotificationService.create_notification(
+    idempotency_key = f"{NotificationType.WITHDRAWAL_APPROVED.value}:{transaction_id}"
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Approved",
@@ -375,20 +459,22 @@ def notify_withdrawal_approved(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal approved",
-        f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal approved",
-            body=f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
-            cta_text="View transactions",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal approved",
+            f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal approved",
+                body=f"Your withdrawal request of ${amount:.2f} has been approved and processed.",
+                cta_text="View transactions",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -401,7 +487,8 @@ def notify_withdrawal_rejected(
 ) -> Notification:
     """Send notification when withdrawal is rejected"""
     message = f"Your withdrawal request of ${amount:.2f} was rejected. Reason: {reason}."
-    notif = NotificationService.create_notification(
+    idempotency_key = f"{NotificationType.WITHDRAWAL_REJECTED.value}:{transaction_id}"
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Rejected",
@@ -410,20 +497,22 @@ def notify_withdrawal_rejected(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal rejected",
-        message,
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal rejected",
-            body=message,
-            cta_text="View transactions",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal rejected",
+            message,
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal rejected",
+                body=message,
+                cta_text="View transactions",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -466,31 +555,40 @@ def notify_investment_matured(
     user_id: uuid.UUID,
     plan_name: str,
     amount: float,
+    investment_id: str | None = None,
 ) -> Notification:
     """Send notification when investment matures"""
     message = f"Your {plan_name} investment has matured. ${amount:.2f} has been released to your wallet."
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.INVESTMENT_MATURED.value}:{investment_id}"
+        if investment_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Investment Matured",
         message=message,
         notification_type=NotificationType.INVESTMENT_MATURED,
         related_entity_type="investment",
+        related_entity_id=investment_id,
         action_url="/plans",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Investment matured",
-        message,
-        html=render_branded_html(
-            title="Investment matured",
-            body=message,
-            cta_text="Review your plans",
-            cta_url=f"{get_frontend_base()}/plans" if get_frontend_base() else None,
-            status="success",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Investment matured",
+            message,
+            html=render_branded_html(
+                title="Investment matured",
+                body=message,
+                cta_text="Review your plans",
+                cta_url=f"{get_frontend_base()}/plans" if get_frontend_base() else None,
+                status="success",
+            ),
+        )
     return notif
 
 
@@ -501,7 +599,12 @@ def notify_deposit_confirmed(
     transaction_id: str | None = None,
 ) -> Notification:
     """Send notification when deposit is confirmed"""
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.DEPOSIT_CONFIRMED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Deposit Confirmed",
@@ -510,19 +613,21 @@ def notify_deposit_confirmed(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/dashboard",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Deposit confirmed",
-        "Your deposit has been confirmed and added to your wallet.",
-        html=render_branded_html(
-            title="Deposit confirmed",
-            body=f"Your deposit of ${amount:.2f} has been confirmed and added to your wallet.",
-            cta_text="Go to dashboard",
-            cta_url=f"{get_frontend_base()}/dashboard" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Deposit confirmed",
+            "Your deposit has been confirmed and added to your wallet.",
+            html=render_branded_html(
+                title="Deposit confirmed",
+                body=f"Your deposit of ${amount:.2f} has been confirmed and added to your wallet.",
+                cta_text="Go to dashboard",
+                cta_url=f"{get_frontend_base()}/dashboard" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -548,7 +653,12 @@ def notify_commission_confirmed(
     else:
         message = f"Your copy trading commission of ${amount:.2f} has been confirmed."
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.COMMISSION_CONFIRMED.value}:{copy_id}"
+        if copy_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title=title,
@@ -557,21 +667,23 @@ def notify_commission_confirmed(
         related_entity_type="copy_relationship",
         related_entity_id=str(copy_id) if copy_id else None,
         action_url="/copy-trading",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        title,
-        message,
-        category=CATEGORY_COPY_TRADING,
-        html=render_branded_html(
-            title=title,
-            body=message,
-            cta_text="View copy trading",
-            cta_url=f"{get_frontend_base()}/copy-trading" if get_frontend_base() else None,
-            status="success",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            title,
+            message,
+            category=CATEGORY_COPY_TRADING,
+            html=render_branded_html(
+                title=title,
+                body=message,
+                cta_text="View copy trading",
+                cta_url=f"{get_frontend_base()}/copy-trading" if get_frontend_base() else None,
+                status="success",
+            ),
+        )
     return notif
 
 
@@ -581,6 +693,7 @@ def email_wallet_transfer(
     amount: float,
     from_wallet: str,
     to_wallet: str,
+    transaction_id: str | None = None,
 ) -> Notification:
     """Notify when funds are moved between internal wallets."""
     body = (
@@ -588,28 +701,36 @@ def email_wallet_transfer(
         f"to your {to_wallet} wallet."
     )
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.WALLET_TRANSFER_COMPLETED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Wallet Transfer Completed",
         message=body,
         notification_type=NotificationType.WALLET_TRANSFER_COMPLETED,
         related_entity_type="wallet_transfer",
+        related_entity_id=transaction_id,
         action_url="/dashboard",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Wallet transfer completed",
-        body,
-        html=render_branded_html(
-            title="Wallet transfer completed",
-            body=body,
-            cta_text="View balances",
-            cta_url=f"{get_frontend_base()}/dashboard" if get_frontend_base() else None,
-            status="info",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Wallet transfer completed",
+            body,
+            html=render_branded_html(
+                title="Wallet transfer completed",
+                body=body,
+                cta_text="View balances",
+                cta_url=f"{get_frontend_base()}/dashboard" if get_frontend_base() else None,
+                status="info",
+            ),
+        )
     return notif
 
 
@@ -635,7 +756,12 @@ def email_deposit_pending(
     body_lines.append("We will notify you once confirmed. If you didn't request this, please ignore.")
     body_text = "\n".join(body_lines)
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.DEPOSIT_PENDING.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Deposit Started",
@@ -644,19 +770,21 @@ def email_deposit_pending(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Deposit started",
-        body_text,
-        html=render_branded_html(
-            title="Deposit started",
-            body="<br>".join(body_lines),
-            cta_text="View deposit status",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Deposit started",
+            body_text,
+            html=render_branded_html(
+                title="Deposit started",
+                body="<br>".join(body_lines),
+                cta_text="View deposit status",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -670,7 +798,12 @@ def email_deposit_failed(
     reason_text = f" Reason: {reason}" if reason else ""
     body = f"Your deposit of ${amount:.2f} could not be completed.{reason_text} Start a new deposit to continue."
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.DEPOSIT_FAILED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Deposit Failed",
@@ -679,19 +812,21 @@ def email_deposit_failed(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Deposit failed",
-        body,
-        html=render_branded_html(
-            title="Deposit failed",
-            body=body,
-            cta_text="Start a new deposit",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Deposit failed",
+            body,
+            html=render_branded_html(
+                title="Deposit failed",
+                body=body,
+                cta_text="Start a new deposit",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -704,7 +839,12 @@ def email_withdrawal_requested(
 ) -> Notification:
     body = f"Your withdrawal request for ${amount:.2f} has been received." + (f" Source: {source}." if source else "")
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.WITHDRAWAL_REQUESTED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Requested",
@@ -713,20 +853,22 @@ def email_withdrawal_requested(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal requested",
-        body,
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal requested",
-            body=body,
-            cta_text="View withdrawals",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal requested",
+            body,
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal requested",
+                body=body,
+                cta_text="View withdrawals",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -738,7 +880,12 @@ def email_withdrawal_cancelled(
 ) -> Notification:
     body = f"Your withdrawal request for ${amount:.2f} was cancelled. If you still need funds, submit a new request."
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.WITHDRAWAL_CANCELLED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Cancelled",
@@ -747,20 +894,22 @@ def email_withdrawal_cancelled(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal cancelled",
-        body,
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal cancelled",
-            body=body,
-            cta_text="Submit new withdrawal",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal cancelled",
+            body,
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal cancelled",
+                body=body,
+                cta_text="Submit new withdrawal",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -773,7 +922,12 @@ def email_withdrawal_failed(
 ) -> Notification:
     body = f"Your withdrawal for ${amount:.2f} could not be processed." + (f" Reason: {reason}" if reason else "")
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.WITHDRAWAL_FAILED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Failed",
@@ -782,20 +936,22 @@ def email_withdrawal_failed(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal failed",
-        body,
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal failed",
-            body=body,
-            cta_text="View withdrawals",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal failed",
+            body,
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal failed",
+                body=body,
+                cta_text="View withdrawals",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+            ),
+        )
     return notif
 
 
@@ -806,32 +962,41 @@ def notify_copy_trade_executed(
     symbol: str,
     side: str,
     amount: float,
+    trade_id: str | None = None,
 ) -> Notification:
     """Send notification when a trade is executed by a trader the user is copying"""
     message = f"{trader_name} executed a {side} trade for {symbol}. Amount: ${amount:.2f}"
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.COPY_TRADE_EXECUTED.value}:{trade_id}"
+        if trade_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Trade Executed",
         message=message,
         notification_type=NotificationType.COPY_TRADE_EXECUTED,
         related_entity_type="trade",
+        related_entity_id=trade_id,
         action_url="/copy-trading",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Copy trade executed",
-        message,
-        category=CATEGORY_COPY_TRADING,
-        html=render_branded_html(
-            title="Copy trade executed",
-            body=message,
-            cta_text="View copy performance",
-            cta_url=f"{get_frontend_base()}/copy-trading" if get_frontend_base() else None,
-            status="success",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Copy trade executed",
+            message,
+            category=CATEGORY_COPY_TRADING,
+            html=render_branded_html(
+                title="Copy trade executed",
+                body=message,
+                cta_text="View copy performance",
+                cta_url=f"{get_frontend_base()}/copy-trading" if get_frontend_base() else None,
+                status="success",
+            ),
+        )
     return notif
 
 
@@ -951,7 +1116,12 @@ def email_deposit_expired(
     expiry = f" The address expired at {expires_at}." if expires_at else ""
     body = f"Your deposit of ${amount:.2f} expired before it was confirmed.{expiry} Start a new deposit to continue."
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.DEPOSIT_EXPIRED.value}:{transaction_id}"
+        if transaction_id
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Deposit Expired",
@@ -960,20 +1130,22 @@ def email_deposit_expired(
         related_entity_type="transaction",
         related_entity_id=transaction_id,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Deposit expired",
-        body,
-        html=render_branded_html(
-            title="Deposit expired",
-            body=body,
-            cta_text="Start a new deposit",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-            status="error",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Deposit expired",
+            body,
+            html=render_branded_html(
+                title="Deposit expired",
+                body=body,
+                cta_text="Start a new deposit",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+                status="error",
+            ),
+        )
     return notif
 
 
@@ -987,7 +1159,12 @@ def email_withdrawal_received(
     if reference:
         body += f" Reference: {reference}."
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.WITHDRAWAL_DELIVERED.value}:{reference}"
+        if reference
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Withdrawal Delivered",
@@ -996,21 +1173,23 @@ def email_withdrawal_received(
         related_entity_type="transaction",
         related_entity_id=reference,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Withdrawal delivered",
-        body,
-        category=CATEGORY_WITHDRAWAL,
-        html=render_branded_html(
-            title="Withdrawal delivered",
-            body=body,
-            cta_text="View transactions",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-            status="success",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Withdrawal delivered",
+            body,
+            category=CATEGORY_WITHDRAWAL,
+            html=render_branded_html(
+                title="Withdrawal delivered",
+                body=body,
+                cta_text="View transactions",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+                status="success",
+            ),
+        )
     return notif
 
 
@@ -1233,7 +1412,12 @@ def email_chargeback_update(
     ref = f" Reference: {reference}." if reference else ""
     body = f"Your dispute/chargeback status: {status}.{ref}"
 
-    notif = NotificationService.create_notification(
+    idempotency_key = (
+        f"{NotificationType.CHARGEBACK_UPDATE.value}:{reference}"
+        if reference
+        else None
+    )
+    notif, created = NotificationService.create_notification_idempotent(
         session=session,
         user_id=user_id,
         title="Dispute Status Updated",
@@ -1242,20 +1426,22 @@ def email_chargeback_update(
         related_entity_type="transaction",
         related_entity_id=reference,
         action_url="/transactions",
+        idempotency_key=idempotency_key,
     )
-    _email_user(
-        session,
-        user_id,
-        "Dispute status updated",
-        body,
-        html=render_branded_html(
-            title="Dispute status updated",
-            body=body,
-            cta_text="View details",
-            cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
-            status="info",
-        ),
-    )
+    if created:
+        _email_user(
+            session,
+            user_id,
+            "Dispute status updated",
+            body,
+            html=render_branded_html(
+                title="Dispute status updated",
+                body=body,
+                cta_text="View details",
+                cta_url=f"{get_frontend_base()}/transactions" if get_frontend_base() else None,
+                status="info",
+            ),
+        )
     return notif
 
 

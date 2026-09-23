@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, Any, cast
 
 from pydantic import AliasChoices, ConfigDict, EmailStr
-from sqlalchemy import Column, DateTime, Integer, JSON, Numeric
+from sqlalchemy import Column, DateTime, Integer, JSON, Numeric, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlmodel import Field, Relationship, SQLModel
@@ -1158,11 +1158,20 @@ class NotificationBase(SQLModel):
 
 class Notification(NotificationBase, table=True):
     """Notification model for storing user notifications"""
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "idempotency_key",
+            name="uq_notification_user_idempotency",
+        ),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", nullable=False, index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     read_at: datetime | None = Field(default=None)
-    
+    idempotency_key: str | None = Field(default=None, max_length=255)
+
     # Relationship to user
     user: Optional["User"] = Relationship(back_populates="notifications")
 
@@ -1176,6 +1185,7 @@ class NotificationCreate(SQLModel):
     related_entity_type: str | None = None
     related_entity_id: str | None = None
     action_url: str | None = None
+    idempotency_key: str | None = None
 
 
 class NotificationPublic(NotificationBase):

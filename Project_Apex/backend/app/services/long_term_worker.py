@@ -148,6 +148,7 @@ async def process_mature_investments() -> dict[str, Any]:
                                     user_id=user.id,
                                     plan_name=plan_name,
                                     amount=amount_transferred,
+                                    investment_id=str(investment.id),
                                 )
                             except Exception as e:
                                 logger.warning(f"Failed to send maturity notification to user {user.id}: {e}")
