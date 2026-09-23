@@ -10,7 +10,7 @@ import {
   type NotificationsPublic,
   type UserNotificationPreferencesPublic,
 } from '@/api';
-import { browserNotificationService } from '@/services/browser-notification-service';
+import { browserNotificationService, isNotificationIdShown, markNotificationIdShown } from '@/services/browser-notification-service';
 import { useToast } from '@/providers/enhanced-toast-provider';
 
 export interface NotificationOptions {
@@ -126,37 +126,45 @@ export function useNotifications(options: NotificationOptions = {}) {
     return permission;
   }, [addToast]);
 
-  // Show browser notification for new notifications
+  // Show browser notification for new notifications.
+  // The notification WebSocket provider is the primary driver for genuine
+  // `notification.new` realtime events. This polling-based path is only a
+  // fallback for when realtime is unavailable, and is deduplicated by
+  // notification id so the same notification can never notify twice.
   useEffect(() => {
-    if (!notificationsData?.data) return;
+    if (!notificationsData?.data?.length) return;
 
     if (!browserNotificationsEnabled) return;
+
+    if (typeof document !== 'undefined' && document.visibilityState !== 'hidden') return;
 
     const permission = browserNotificationService.getPermissionStatus();
     if (permission !== 'granted') return;
 
-    // Check for new notifications (this is a simple implementation)
-    // In production, you might want to track which notifications have been shown
-    const latestNotification = notificationsData.data[0];
-    
-    if (latestNotification && !latestNotification.is_read) {
-      const now = new Date();
-      const createdAt = new Date(latestNotification.created_at);
-      const secondsSinceCreation = (now.getTime() - createdAt.getTime()) / 1000;
-      
-      // Only show notification if it's very recent (within polling interval)
-      if (secondsSinceCreation < pollingInterval / 1000) {
-        browserNotificationService.showNotification(
-          latestNotification.title,
-          {
-            body: latestNotification.message,
-            data: {
-              notificationId: latestNotification.id,
-              actionUrl: latestNotification.action_url,
-            },
-          }
-        );
-      }
+    const now = Date.now();
+    for (const notification of notificationsData.data) {
+      if (notification.is_read) continue;
+
+      const createdAt = new Date(notification.created_at).getTime();
+      if (Number.isNaN(createdAt)) continue;
+
+      // Only surface notifications that are recent (within the polling window).
+      if ((now - createdAt) / 1000 >= pollingInterval / 1000) continue;
+
+      if (isNotificationIdShown(notification.id)) continue;
+
+      markNotificationIdShown(notification.id);
+      browserNotificationService.showNotification(
+        notification.title,
+        {
+          body: notification.message,
+          data: {
+            notificationId: notification.id,
+            actionUrl: notification.action_url,
+          },
+        }
+      );
+      break;
     }
   }, [notificationsData, pollingInterval, browserNotificationsEnabled]);
 
@@ -168,6 +176,7 @@ export function useNotifications(options: NotificationOptions = {}) {
     error,
     refetch,
     markAsRead: markAsReadMutation.mutate,
+    markAsReadAsync: markAsReadMutation.mutateAsync,
     markAllAsRead: markAllAsReadMutation.mutate,
     deleteNotification: deleteNotificationMutation.mutate,
     requestPermission,

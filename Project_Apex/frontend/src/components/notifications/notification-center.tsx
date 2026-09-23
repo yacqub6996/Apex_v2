@@ -25,6 +25,8 @@ import {
 import { useNotifications } from '@/hooks/use-notifications';
 import { formatDistanceToNow } from 'date-fns';
 import type { NotificationPublic } from '@/api';
+import { useNavigate } from '@tanstack/react-router';
+import { resolveNotificationActionUrl } from '@/utils/notification-routes';
 
 const getNotificationIcon = (type: string) => {
   switch (type) {
@@ -65,12 +67,13 @@ const getNotificationColor = (type: string) => {
 export const NotificationCenter = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const navigate = useNavigate();
 
   const {
     notifications,
     unreadCount,
     isLoading,
-    markAsRead,
+    markAsReadAsync,
     markAllAsRead,
     deleteNotification,
   } = useNotifications({
@@ -88,16 +91,31 @@ export const NotificationCenter = () => {
   };
 
   const handleNotificationClick = (notification: NotificationPublic) => {
-    if (!notification.is_read) {
-      markAsRead(notification.id);
-    }
-    
-    // Navigate to action URL if provided
-    if (notification.action_url) {
-      window.location.href = notification.action_url;
-    }
-    
+    const target = resolveNotificationActionUrl(notification.action_url);
+
+    // Close the menu immediately so the UI responds before the read request
+    // completes; the read mutation continues across SPA navigation.
     handleClose();
+
+    if (!notification.is_read) {
+      // Await the PATCH so the read state reliably persists before we leave
+      // the current route. Navigation still proceeds if the PATCH fails:
+      // polling/WebSocket reconciliation remains the authoritative fallback.
+      void markAsReadAsync(notification.id)
+        .catch(() => {
+          // Read-state reconciliation continues via polling/WebSocket.
+        })
+        .finally(() => {
+          if (target) {
+            void navigate({ to: target.to, search: target.search });
+          }
+        });
+      return;
+    }
+
+    if (target) {
+      void navigate({ to: target.to, search: target.search });
+    }
   };
 
   const handleMarkAllRead = () => {
@@ -286,8 +304,8 @@ export const NotificationCenter = () => {
                 fullWidth
                 size="small"
                 onClick={() => {
-                  window.location.href = '/dashboard/settings?tab=notifications';
                   handleClose();
+                  void navigate({ to: '/dashboard/settings', search: { tab: 'notifications' } });
                 }}
                 sx={{ textTransform: 'none' }}
               >

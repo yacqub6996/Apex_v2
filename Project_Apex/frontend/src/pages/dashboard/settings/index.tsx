@@ -1,10 +1,12 @@
-import { useState, Suspense, lazy } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/base/buttons/button';
 import { Person, Security, NotificationsActive, Settings } from "@mui/icons-material";
 import { Chip, Box, Typography, Stack, Card, CardContent } from '@mui/material';
 import { TabList, Tab } from '@/components/application/tabs/tabs';
 import { SettingsTabSkeleton } from '@/components/ui/loading-skeleton';
+import { settingsTabIndexFromTab } from '@/utils/settings-tabs';
 
 // Lazy load settings components with proper typing
 const ProfileSettings = lazy(() => import('@/pages/settings/profile-settings').then(module => ({ default: module.ProfileSettings })));
@@ -21,10 +23,23 @@ const tabs = [
 
 export const DashboardSettings = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const search = location.search as { tab?: string };
+  const [activeTab, setActiveTab] = useState(() => settingsTabIndexFromTab(search.tab));
+
+  // Keep the active tab in sync with deep links (for example
+  // /dashboard/settings?tab=notifications) and back/forward navigation.
+  useEffect(() => {
+    setActiveTab(settingsTabIndexFromTab(search.tab));
+  }, [search.tab]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
+    const tabId = tabs[newValue]?.id;
+    if (tabId) {
+      void navigate({ to: '/dashboard/settings', search: { tab: tabId }, replace: true });
+    }
   };
 
   const renderTabContent = () => {
