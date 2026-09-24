@@ -31,7 +31,9 @@ def db() -> Generator[Session, None, None]:
         session.execute(
             text(
                 'TRUNCATE TABLE tradertrade, trade, usertradercopy, kycdocument, '
-                'userprofile, traderprofile, item, transaction, "user" RESTART IDENTITY CASCADE'
+                'userprofile, traderprofile, item, transaction, '
+                'emailverificationattempt, emailverificationhandoff, '
+                '"user" RESTART IDENTITY CASCADE'
             )
         )
         session.commit()

@@ -13,6 +13,20 @@ import {
 
 export type UserRole = 'admin' | 'user';
 
+export type AuthErrorCode = 'INVALID_CREDENTIALS' | 'INACTIVE_ACCOUNT' | 'EMAIL_NOT_VERIFIED';
+
+export class AuthLoginError extends Error {
+  readonly code: AuthErrorCode;
+  readonly email?: string;
+
+  constructor(code: AuthErrorCode, message: string, email?: string) {
+    super(message);
+    this.name = 'AuthLoginError';
+    this.code = code;
+    this.email = email;
+  }
+}
+
 type AccountTier = string;
 
 type User = {
@@ -49,6 +63,7 @@ type AuthContextType = {
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<UserRole>;
   loginWithGoogle: (idToken: string) => Promise<UserRole>;
+  exchangeVerificationHandoff: (handoffToken: string) => Promise<UserRole>;
   logout: () => void;
   refreshToken: () => Promise<void>;
 };
@@ -172,6 +187,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [userQuery.isFetching, userQuery.data, userQuery.error, queryClient]);
 
+  const establishSession = async (accessToken: string) => {
+    console.log('Auth: establishing session from access token');
+    setAccessToken(accessToken);
+    setAuthTokenState(accessToken);
+    try {
+      const currentUser = await UsersService.usersReadUserMe();
+      queryClient.setQueryData(['currentUser'], currentUser);
+      setUser(normaliseUser(currentUser as Record<string, unknown>));
+    } catch (error) {
+      console.error('Auth: failed to fetch user after login', error);
+      clearAccessToken();
+      setAuthTokenState(undefined);
+      queryClient.removeQueries({ queryKey: ['currentUser'] });
+      throw error;
+    }
+  };
+
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       console.log('Login mutation: Attempting login for', email);
@@ -185,21 +217,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: async (data) => {
       console.log('Login mutation: Success, setting token', data);
-      setAccessToken(data.access_token);
-      setAuthTokenState(data.access_token);
-      try {
-        console.log('Login mutation: Fetching current user');
-        const currentUser = await UsersService.usersReadUserMe();
-        console.log('Login mutation: User fetched successfully', currentUser);
-        queryClient.setQueryData(['currentUser'], currentUser);
-        setUser(normaliseUser(currentUser as Record<string, unknown>));
-      } catch (error) {
-        console.error('Login mutation: Failed to fetch user after login', error);
-        clearAccessToken();
-        setAuthTokenState(undefined);
-        queryClient.removeQueries({ queryKey: ['currentUser'] });
-        throw error;
-      }
+      await establishSession(data.access_token);
+    },
+  });
+
+  const handoffLoginMutation = useMutation({
+    mutationFn: async ({ handoffToken }: { handoffToken: string }) => {
+      console.log('Handoff login mutation: exchanging verification handoff');
+      const result = await LoginService.loginExchangeVerification({
+        handoff_token: handoffToken,
+      });
+      console.log('Handoff login mutation: Request completed successfully', result);
+      return result;
+    },
+    onSuccess: async (data) => {
+      console.log('Handoff login mutation: Success, setting token', data);
+      await establishSession(data.access_token);
     },
   });
 
@@ -285,24 +318,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const rawRole = ((token?.role as string) ?? 'user').toLowerCase();
       return rawRole === 'admin' ? 'admin' : 'user';
     } catch (error) {
-      let message = 'Login failed';
       if (error instanceof ApiError) {
-        const detail = (error.body as any)?.detail as string | undefined;
-        if (error.status === 403 && detail) {
-          // Preserve backend guidance when email is not verified or access is forbidden.
-          message = detail;
-        } else if (error.status === 400 && detail) {
-          // Typically "Incorrect email or password"
-          message = detail;
-        } else {
-          message = detail ?? error.message ?? message;
+        const detail = (error.body as any)?.detail;
+        if (detail && typeof detail === 'object' && typeof detail.code === 'string') {
+          const code = detail.code as string;
+          const message =
+            typeof detail.message === 'string' ? detail.message : 'Login failed';
+          if (code === 'EMAIL_NOT_VERIFIED' || code === 'INACTIVE_ACCOUNT' || code === 'INVALID_CREDENTIALS') {
+            throw new AuthLoginError(code, message, email);
+          }
         }
-      } else if (error instanceof Error) {
-        message = error.message;
+        // Legacy string detail (Google and other untouched endpoints).
+        if (typeof detail === 'string') {
+          if (error.status === 403 && /email not verified/i.test(detail)) {
+            throw new AuthLoginError('EMAIL_NOT_VERIFIED', detail, email);
+          }
+          if (error.status === 400) {
+            const code = /inactive/i.test(detail) ? 'INACTIVE_ACCOUNT' : 'INVALID_CREDENTIALS';
+            throw new AuthLoginError(code, detail, email);
+          }
+        }
       }
-      throw new Error(message);
+      const message = error instanceof Error ? error.message : 'Login failed';
+      throw new AuthLoginError('INVALID_CREDENTIALS', message, email);
     }
   }, [loginMutation]);
+
+  const exchangeVerificationHandoff = useCallback(
+    async (handoffToken: string): Promise<UserRole> => {
+      const token = await handoffLoginMutation.mutateAsync({ handoffToken });
+      const rawRole = ((token?.role as string) ?? 'user').toLowerCase();
+      return rawRole === 'admin' ? 'admin' : 'user';
+    },
+    [handoffLoginMutation],
+  );
 
   const loginWithGoogle = useCallback(async (idToken: string): Promise<UserRole> => {
     try {
@@ -338,11 +387,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const contextValue = useMemo<AuthContextType>(
     () => ({
       user,
-      isLoading: isLoading || loginMutation.isPending || googleLoginMutation.isPending,
+      isLoading:
+        isLoading ||
+        loginMutation.isPending ||
+        googleLoginMutation.isPending ||
+        handoffLoginMutation.isPending,
       isAuthenticated: Boolean(user),
       isAdmin: user?.role === 'admin',
       login,
       loginWithGoogle,
+      exchangeVerificationHandoff,
       logout,
       refreshToken,
     }),
@@ -351,6 +405,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isLoading,
       loginMutation.isPending,
       googleLoginMutation.isPending,
+      handoffLoginMutation.isPending,
       // login, // These functions are stable and don't need to be in the deps array
       // loginWithGoogle,
       // logout,

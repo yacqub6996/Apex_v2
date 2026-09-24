@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, Any, cast
 
 from pydantic import AliasChoices, ConfigDict, EmailStr
-from sqlalchemy import Column, DateTime, Integer, JSON, Numeric, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, Integer, JSON, Numeric, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlmodel import Field, Relationship, SQLModel
@@ -705,6 +705,95 @@ class NewPassword(SQLModel):
     """Payload for resetting a password via token."""
     token: str
     new_password: str
+
+
+class ResendEmailVerification(SQLModel):
+    """Payload for requesting a new verification email without an access token."""
+    email: EmailStr
+
+
+class VerifyEmailResponse(SQLModel):
+    """Response returned after successfully consuming a verification link."""
+    message: str
+    handoff_token: str
+    handoff_expires_in: int
+
+
+class ExchangeVerificationRequest(SQLModel):
+    """Payload for exchanging a post-verification handoff for an access token."""
+    handoff_token: str
+
+
+class VerificationHandoffStatus(str, Enum):
+    PENDING = "PENDING"
+    USED = "USED"
+    REVOKED = "REVOKED"
+
+
+class EmailVerificationHandoff(SQLModel, table=True):
+    """Short-lived, single-use handoff that lets a freshly verified browser
+    exchange proof of verification for a normal access token."""
+
+    __tablename__ = "emailverificationhandoff"
+    __table_args__ = (
+        Index("ix_emailverificationhandoff_status_expires", "status", "expires_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", nullable=False)
+    token_hash: str = Field(max_length=64, unique=True, index=True)
+    status: VerificationHandoffStatus = Field(
+        sa_column=Column(
+            SAEnum(VerificationHandoffStatus, name="verificationhandoffstatus"),
+            nullable=False,
+            server_default=VerificationHandoffStatus.PENDING.value,
+        )
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+
+class EmailVerificationAttemptOutcome(str, Enum):
+    SENT = "SENT"
+    SKIPPED_UNKNOWN = "SKIPPED_UNKNOWN"
+    SKIPPED_ALREADY_VERIFIED = "SKIPPED_ALREADY_VERIFIED"
+
+
+class EmailVerificationAttempt(SQLModel, table=True):
+    """Abuse-protection ledger for verification-email resend requests.
+
+    Identifiers are stored as HMAC-SHA256 digests (keyed with the server
+    secret) so the database values are not dictionary-reversible.
+    """
+
+    __tablename__ = "emailverificationattempt"
+    __table_args__ = (
+        Index("ix_emailverificationattempt_email_hmac_requested", "email_hmac", "requested_at"),
+        Index("ix_emailverificationattempt_ip_hmac_requested", "ip_hmac", "requested_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    email_hmac: str = Field(max_length=64)
+    ip_hmac: str | None = Field(default=None, max_length=64)
+    outcome: EmailVerificationAttemptOutcome = Field(
+        sa_column=Column(
+            SAEnum(EmailVerificationAttemptOutcome, name="emailverificationattemptoutcome"),
+            nullable=False,
+        )
+    )
+    requested_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class BalanceTransferStatus(str, Enum):

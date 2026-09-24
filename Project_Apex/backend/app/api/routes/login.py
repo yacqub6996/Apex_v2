@@ -1,19 +1,36 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated, Any
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import SQLModel
+from sqlalchemy import text
+from sqlmodel import SQLModel, func, select, update
 
 from app import crud
 from app.api.deps import CurrentUser, SessionDep, get_current_active_superuser
 from app.core import security
 from app.core.config import settings
+from app.core.hashing import hmac_to_advisory_lock_key, keyed_hmac_sha256, sha256_hex
 from app.core.security import get_password_hash, verify_password
 from app.core.time import utc_now
-from app.models import Message, NewPassword, Token, User, UserPublic, UserCreate, UserRole
+from app.models import (
+    EmailVerificationAttempt,
+    EmailVerificationAttemptOutcome,
+    EmailVerificationHandoff,
+    ExchangeVerificationRequest,
+    Message,
+    NewPassword,
+    ResendEmailVerification,
+    Token,
+    User,
+    UserPublic,
+    UserCreate,
+    UserRole,
+    VerificationHandoffStatus,
+    VerifyEmailResponse,
+)
 from app.services.long_term import mature_due_investments
 from app.utils import (
     generate_password_reset_token,
@@ -91,6 +108,24 @@ def _ensure_static_superuser(session: SessionDep, password: str) -> User | None:
     return user
 
 
+def _auth_error(status_code: int, code: str, message: str) -> HTTPException:
+    """Build a structured, machine-readable authentication error."""
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message},
+    )
+
+
+def _issue_access_token_for_user(user: User) -> str:
+    """Issue the standard application access token for ``user``."""
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return security.create_access_token(
+        user.id,
+        expires_delta=access_token_expires,
+        extra_claims={"role": user.role.value},
+    )
+
+
 @router.post("/login/access-token", response_model=Token, status_code=200)
 def login_access_token(
     session: SessionDep, request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
@@ -104,23 +139,19 @@ def login_access_token(
             session=session, email=form_data.username, password=form_data.password
         )
     if not user:
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        raise _auth_error(400, "INVALID_CREDENTIALS", "Incorrect email or password")
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise _auth_error(400, "INACTIVE_ACCOUNT", "Inactive user")
     # Only enforce email verification when an email provider is configured.
     # In environments without outbound email, allow login without verification.
     if settings.emails_enabled and not user.email_verified:
-        raise HTTPException(
-            status_code=403,
-            detail="Email not verified. Please check your inbox for the verification link.",
+        raise _auth_error(
+            403,
+            "EMAIL_NOT_VERIFIED",
+            "Email not verified. Please check your inbox for the verification link.",
         )
     previous_login = user.last_login_at
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    token = security.create_access_token(
-        user.id,
-        expires_delta=access_token_expires,
-        extra_claims={"role": user.role.value},
-    )
+    token = _issue_access_token_for_user(user)
     user.last_login_at = utc_now()
     session.add(user)
     try:
@@ -397,18 +428,148 @@ async def request_email_verification(current_user: CurrentUser) -> Message:
         return Message(message="Email not configured; verification link has been logged on the server")
 
 
-@router.post("/verify-email", response_model=Message, status_code=200)
-def verify_email(session: SessionDep, body: EmailVerificationToken) -> Message:
-    """Accept a verification token and mark the user as verified if valid."""
+@router.post("/resend-email-verification", response_model=Message, status_code=200)
+async def resend_email_verification(
+    session: SessionDep, request: Request, body: ResendEmailVerification
+) -> Message:
+    """Request a new verification email without holding an access token.
+
+    The response is identical for unknown, already-verified, and unverified
+    addresses so callers cannot enumerate accounts. Abuse protection is
+    enforced server-side with PostgreSQL advisory locks plus a persisted
+    attempt ledger keyed by HMAC digests.
+    """
+    submitted_email = str(body.email).strip()
+    normalized_email = submitted_email.lower()
+    client_ip = request.client.host if request.client else "unknown"
+
+    email_hmac = keyed_hmac_sha256(
+        normalized_email, purpose="email_verification_resend_email"
+    )
+    ip_hmac = keyed_hmac_sha256(client_ip, purpose="email_verification_resend_ip")
+
+    # Serialize concurrent requests for the same email and the same IP at the
+    # database level so two simultaneous requests cannot both pass a
+    # SELECT-then-INSERT cooldown check and produce duplicate emails.
+    session.exec(
+        text("SELECT pg_advisory_xact_lock(:key)").bindparams(
+            key=hmac_to_advisory_lock_key(email_hmac)
+        )
+    )
+    session.exec(
+        text("SELECT pg_advisory_xact_lock(:key)").bindparams(
+            key=hmac_to_advisory_lock_key(ip_hmac)
+        )
+    )
+
+    now = utc_now()
+    cooldown_cutoff = now - timedelta(seconds=settings.VERIFICATION_RESEND_COOLDOWN_SECONDS)
+    recent_email_attempts = session.exec(
+        select(func.count())
+        .select_from(EmailVerificationAttempt)
+        .where(
+            EmailVerificationAttempt.email_hmac == email_hmac,
+            EmailVerificationAttempt.requested_at >= cooldown_cutoff,
+        )
+    ).one()
+    if recent_email_attempts > 0:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait before requesting another verification email.",
+            headers={"Retry-After": str(settings.VERIFICATION_RESEND_COOLDOWN_SECONDS)},
+        )
+
+    ip_window_cutoff = now - timedelta(
+        seconds=settings.VERIFICATION_RESEND_IP_WINDOW_SECONDS
+    )
+    recent_ip_attempts = session.exec(
+        select(func.count())
+        .select_from(EmailVerificationAttempt)
+        .where(
+            EmailVerificationAttempt.ip_hmac == ip_hmac,
+            EmailVerificationAttempt.requested_at >= ip_window_cutoff,
+        )
+    ).one()
+    if recent_ip_attempts >= settings.VERIFICATION_RESEND_IP_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many verification email requests. Please try again later.",
+            headers={"Retry-After": str(settings.VERIFICATION_RESEND_IP_WINDOW_SECONDS)},
+        )
+
+    user = crud.get_user_by_email(session=session, email=submitted_email)
+    should_send = bool(user and not user.email_verified)
+    if should_send:
+        outcome = EmailVerificationAttemptOutcome.SENT
+    elif not user:
+        outcome = EmailVerificationAttemptOutcome.SKIPPED_UNKNOWN
+    else:
+        outcome = EmailVerificationAttemptOutcome.SKIPPED_ALREADY_VERIFIED
+
+    session.add(
+        EmailVerificationAttempt(
+            email_hmac=email_hmac,
+            ip_hmac=ip_hmac,
+            outcome=outcome,
+        )
+    )
+    session.commit()
+    # The advisory locks are released by the commit above.
+
+    if should_send:
+        token = generate_email_verification_token(normalized_email)
+        email_data = generate_email_verification_email(normalized_email, token)
+        try:
+            await send_email(
+                email_to=normalized_email,
+                subject=email_data.subject,
+                html_content=email_data.html_content,
+            )
+        except Exception:
+            logger.warning(
+                "resend_verification_email_failed",
+                extra={"email_hmac": email_hmac},
+                exc_info=True,
+            )
+
+    logger.info(
+        "resend_email_verification_request",
+        extra={"email_hmac": email_hmac, "outcome": outcome.value},
+    )
+    return Message(
+        message=(
+            "If an account with that email exists and is not verified, "
+            "a verification email has been sent."
+        )
+    )
+
+
+@router.post("/verify-email", response_model=VerifyEmailResponse, status_code=200)
+def verify_email(session: SessionDep, body: EmailVerificationToken) -> VerifyEmailResponse:
+    """Accept a verification token and mark the user as verified if valid.
+
+    On success a short-lived, single-use handoff token is returned so the
+    frontend can exchange it for a normal access token. The access token
+    itself is never returned directly from this endpoint.
+    """
     email = verify_email_verification_token(body.token)
     if not email:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
     user = crud.get_user_by_email(session=session, email=email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.email_verified = True
     user.email_verified_at = utc_now()
+    handoff_token = secrets.token_urlsafe(32)
+    handoff = EmailVerificationHandoff(
+        user_id=user.id,
+        token_hash=sha256_hex(handoff_token),
+        status=VerificationHandoffStatus.PENDING,
+        expires_at=utc_now()
+        + timedelta(seconds=settings.POST_VERIFICATION_HANDOFF_TTL_SECONDS),
+    )
     session.add(user)
+    session.add(handoff)
     try:
         session.commit()
     except Exception:
@@ -424,4 +585,70 @@ def verify_email(session: SessionDep, body: EmailVerificationToken) -> Message:
             exc_info=True,
             extra={"user_id": str(user.id)},
         )
-    return Message(message="Email verified successfully")
+    return VerifyEmailResponse(
+        message="Email verified successfully",
+        handoff_token=handoff_token,
+        handoff_expires_in=settings.POST_VERIFICATION_HANDOFF_TTL_SECONDS,
+    )
+
+
+@router.post("/login/exchange-verification", response_model=Token, status_code=200)
+def exchange_verification(
+    session: SessionDep, body: ExchangeVerificationRequest
+) -> Token:
+    """Exchange a single-use post-verification handoff for an access token."""
+    token_hash = sha256_hex(body.handoff_token)
+    now = utc_now()
+    handoff = session.exec(
+        select(EmailVerificationHandoff).where(
+            EmailVerificationHandoff.token_hash == token_hash
+        )
+    ).first()
+    if not handoff:
+        raise HTTPException(
+            status_code=400, detail="Verification session expired. Please log in again."
+        )
+    if handoff.status != VerificationHandoffStatus.PENDING or handoff.expires_at <= now:
+        raise HTTPException(
+            status_code=400, detail="Verification session expired. Please log in again."
+        )
+
+    # Atomic single-use claim; a concurrent exchange of the same handoff will
+    # observe rowcount == 0 and fail.
+    claim = session.exec(
+        update(EmailVerificationHandoff)
+        .where(
+            EmailVerificationHandoff.id == handoff.id,
+            EmailVerificationHandoff.status == VerificationHandoffStatus.PENDING,
+            EmailVerificationHandoff.expires_at > now,
+        )
+        .values(status=VerificationHandoffStatus.USED, used_at=now)
+    )
+    if claim.rowcount != 1:
+        raise HTTPException(
+            status_code=400, detail="Verification session expired. Please log in again."
+        )
+
+    user = session.get(User, handoff.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_active:
+        raise _auth_error(400, "INACTIVE_ACCOUNT", "Inactive user")
+    if not user.email_verified:
+        raise _auth_error(
+            403,
+            "EMAIL_NOT_VERIFIED",
+            "Email not verified. Please check your inbox for the verification link.",
+        )
+    token = _issue_access_token_for_user(user)
+    user.last_login_at = now
+    session.add(user)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception(
+            "Failed to complete verification exchange", extra={"user_id": str(user.id)}
+        )
+        raise HTTPException(status_code=500, detail="Login failed. Please try again.")
+    return Token(access_token=token, role=user.role)

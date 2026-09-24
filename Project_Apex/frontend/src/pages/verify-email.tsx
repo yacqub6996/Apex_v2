@@ -10,14 +10,14 @@ import { UntitledLogoMinimal } from '@/components/foundations/logo/untitledui-lo
 import { EmailVerificationService } from '@/services/email-verification-service';
 import { useAuth } from '@/providers/auth-provider';
 
-type VerificationState = 'idle' | 'verifying' | 'success' | 'error';
+type VerificationState = 'idle' | 'verifying' | 'exchanging' | 'success' | 'error';
 
 export const VerifyEmailPage = () => {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [state, setState] = useState<VerificationState>('idle');
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated } = useAuth();
+  const { exchangeVerificationHandoff } = useAuth();
 
   const token = useMemo(() => {
     try {
@@ -39,9 +39,19 @@ export const VerifyEmailPage = () => {
       setState('verifying');
       setError(null);
       try {
-        await EmailVerificationService.verifyEmail(token);
-        await queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-        setState('success');
+        const result = await EmailVerificationService.verifyEmail(token);
+        setState('exchanging');
+        try {
+          await exchangeVerificationHandoff(result.handoff_token);
+          await queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+          setState('success');
+        } catch (exchangeError) {
+          console.error('Failed to exchange verification handoff', exchangeError);
+          setError(
+            'Your email was verified, but sign-in could not be completed. Please sign in with your email and password.',
+          );
+          setState('error');
+        }
       } catch (err: any) {
         const detail = err?.body?.detail || err?.message || 'Verification failed. Please try again.';
         setError(String(detail));
@@ -50,19 +60,17 @@ export const VerifyEmailPage = () => {
     };
 
     verify();
-  }, [queryClient, token]);
+  }, [exchangeVerificationHandoff, queryClient, token]);
 
   useEffect(() => {
     if (state !== 'success') return;
     const timeout = setTimeout(() => {
-      if (isAuthenticated) {
-        router.navigate({ to: '/dashboard' });
-      } else {
-        router.navigate({ to: '/login' });
-      }
-    }, 1200);
+      router.navigate({ to: '/dashboard' });
+    }, 800);
     return () => clearTimeout(timeout);
-  }, [isAuthenticated, router, state]);
+  }, [router, state]);
+
+  const busy = state === 'verifying' || state === 'exchanging';
 
   const headline =
     state === 'success'
@@ -75,12 +83,14 @@ export const VerifyEmailPage = () => {
 
   const description =
     state === 'success'
-      ? 'Your email is now verified. Continue to the dashboard to finish onboarding.'
+      ? 'Your email is now verified. You will be redirected to the dashboard.'
       : state === 'error'
         ? error || 'We could not verify your email. You can retry from the link in your inbox.'
         : token
-          ? 'Hang tight while we confirm your verification link.'
-          : 'Open the verification link we just sent. If you do not see it, check spam or request another.';
+          ? state === 'exchanging'
+            ? 'Email verified — signing you in...'
+            : 'Hang tight while we confirm your verification link.'
+          : 'Open the verification link we just sent. If you do not see it, check spam or use Resend verification on the login page.';
 
   const statusColor = state === 'success' ? 'success' : state === 'error' ? 'warning' : 'info';
   const statusIcon =
@@ -120,7 +130,7 @@ export const VerifyEmailPage = () => {
           </Typography>
         </Box>
 
-        <Alert severity={statusColor} icon={state === 'verifying' ? <CircularProgress size={18} /> : statusIcon} sx={{ mb: 3 }}>
+        <Alert severity={statusColor} icon={busy ? <CircularProgress size={18} /> : statusIcon} sx={{ mb: 3 }}>
           <Typography variant="body2" color="text.primary" fontWeight={600}>
             {headline}
           </Typography>
@@ -129,7 +139,7 @@ export const VerifyEmailPage = () => {
           </Typography>
           {!token && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Need a new link? After logging in you can resend from settings or request another from support.
+              Need a new link? Go back to the login page and use Resend verification.
             </Typography>
           )}
         </Alert>
@@ -140,7 +150,7 @@ export const VerifyEmailPage = () => {
             variant="contained"
             size="large"
             onClick={() => router.navigate({ to: '/dashboard' })}
-            disabled={state === 'verifying'}
+            disabled={busy}
           >
             Go to dashboard
           </Button>

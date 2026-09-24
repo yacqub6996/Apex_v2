@@ -1,19 +1,16 @@
-import { OpenAPI } from '@/api/core/OpenAPI';
-import { request as __request } from '@/api/core/request';
+import { LoginService } from '@/api/services/LoginService';
+import type { Message, VerifyEmailResponse } from '@/api';
 
 export const EmailVerificationService = {
-  requestVerification(): Promise<void> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/v1/request-email-verification',
-    }).then(() => undefined);
+  // Kept for backward compatibility with the legacy onboarding page, which
+  // still calls the authenticated resend endpoint.
+  requestVerification(): Promise<Message> {
+    return LoginService.loginRequestEmailVerification();
   },
-  verifyEmail(token: string): Promise<void> {
-    return __request(OpenAPI, {
-      method: 'POST',
-      url: '/api/v1/verify-email',
-      body: { token },
-      mediaType: 'application/json',
-    }).then(() => undefined);
+  resendVerification(email: string): Promise<Message> {
+    return LoginService.loginResendEmailVerification({ email });
+  },
+  verifyEmail(token: string): Promise<VerifyEmailResponse> {
+    return LoginService.loginVerifyEmail({ token });
   },
 };

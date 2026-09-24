@@ -110,6 +110,12 @@ class Settings(BaseSettings):
 
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
 
+    # Email verification resend abuse protection and handoff TTL
+    VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    VERIFICATION_RESEND_IP_MAX: int = 5
+    VERIFICATION_RESEND_IP_WINDOW_SECONDS: int = 900
+    POST_VERIFICATION_HANDOFF_TTL_SECONDS: int = 300
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def emails_enabled(self) -> bool:
