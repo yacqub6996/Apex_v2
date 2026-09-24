@@ -114,4 +114,35 @@ describe('LoginSplitCarousel verification-required state', () => {
     expect(screen.queryByText('Verify your email')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resend verification' })).not.toBeInTheDocument();
   });
+
+  it('returns to the verification-required state after going back to login and retrying unverified credentials', async () => {
+    mockLogin.mockRejectedValue(
+      new AuthLoginError('EMAIL_NOT_VERIFIED', 'Email not verified', 'jordan@example.com'),
+    );
+
+    render(<LoginSplitCarousel />);
+
+    const submitUnverifiedLogin = async () => {
+      fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Resend verification' })).toBeInTheDocument();
+      });
+    };
+
+    await submitUnverifiedLogin();
+
+    // Return to the sign-in form.
+    fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    });
+
+    // Attempting the same unverified credentials must bring the user back
+    // into the verification-required state, not silently refresh the page.
+    await submitUnverifiedLogin();
+    expect(screen.getByText('Verify your email')).toBeInTheDocument();
+    expect(mockLogin).toHaveBeenCalledTimes(2);
+  });
 });

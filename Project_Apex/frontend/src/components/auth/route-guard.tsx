@@ -16,21 +16,21 @@ export const RouteGuard = ({
   redirectTo = '/login',
   allowedRoles,
 }: RouteGuardProps) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isHydrating, user } = useAuth();
   const router = useRouter();
 
   console.log('RouteGuard state:', {
     requireAuth,
     isAuthenticated,
-    isLoading,
+    isHydrating,
     user: user?.email,
     allowedRoles,
     redirectTo
   });
 
   useEffect(() => {
-    if (isLoading) {
-      console.log('RouteGuard: Still loading, waiting...');
+    if (isHydrating) {
+      console.log('RouteGuard: Still hydrating, waiting...');
       return;
     }
 
@@ -55,9 +55,9 @@ export const RouteGuard = ({
     }
 
     console.log('RouteGuard: Access granted');
-  }, [allowedRoles, isAuthenticated, isLoading, redirectTo, requireAuth, router, user]);
+  }, [allowedRoles, isAuthenticated, isHydrating, redirectTo, requireAuth, router, user]);
 
-  if (isLoading) {
+  if (isHydrating) {
     console.log('RouteGuard: Rendering loading state');
     return (
       <div className="flex h-screen items-center justify-center">

@@ -171,6 +171,7 @@ export const LoginSplitCarousel = () => {
                                         type="button"
                                         size="lg"
                                         color="primary"
+                                        className="w-full"
                                         isDisabled={verification.cooldown > 0 || verification.status === "sending"}
                                         isLoading={verification.status === "sending"}
                                         showTextWhileLoading
@@ -179,17 +180,18 @@ export const LoginSplitCarousel = () => {
                                         {resendLabel}
                                     </Button>
                                     {verification.status === "sent" && (
-                                        <p className="text-sm text-emerald-600">
+                                        <p role="status" className="text-sm text-emerald-600">
                                             Verification email sent — check your inbox.
                                         </p>
                                     )}
                                     {verification.status === "error" && (
-                                        <p className="text-sm text-red-600">{verification.errorMessage}</p>
+                                        <p role="alert" className="text-sm text-red-600">{verification.errorMessage}</p>
                                     )}
                                     <Button
                                         type="button"
                                         size="md"
                                         color="link-gray"
+                                        className="w-full"
                                         onClick={() => {
                                             setVerification(null);
                                             setFormError(null);

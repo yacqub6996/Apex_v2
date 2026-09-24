@@ -145,18 +145,31 @@ export const VerifyEmailPage = () => {
         </Alert>
 
         <Stack spacing={2}>
-          <Button
-            fullWidth
-            variant="contained"
-            size="large"
-            onClick={() => router.navigate({ to: '/dashboard' })}
-            disabled={busy}
-          >
-            Go to dashboard
-          </Button>
-          <Button fullWidth variant="outlined" size="large" onClick={() => router.navigate({ to: '/login' })}>
-            Back to login
-          </Button>
+          {state === 'success' ? (
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
+              onClick={() => router.navigate({ to: '/dashboard' })}
+            >
+              Go to dashboard
+            </Button>
+          ) : (
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
+              onClick={() => router.navigate({ to: '/login' })}
+              disabled={busy}
+            >
+              Return to sign in
+            </Button>
+          )}
+          {state === 'success' && (
+            <Button fullWidth variant="outlined" size="large" onClick={() => router.navigate({ to: '/login' })}>
+              Return to sign in
+            </Button>
+          )}
         </Stack>
       </Paper>
     </Box>

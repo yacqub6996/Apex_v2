@@ -59,6 +59,7 @@ type User = {
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
+  isHydrating: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<UserRole>;
@@ -131,7 +132,7 @@ const normaliseUser = (payload: Record<string, unknown>): User => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isHydrating, setIsHydrating] = useState(true);
   const [authToken, setAuthTokenState] = useState<string | undefined>(() => getAccessToken());
   const queryClient = useQueryClient();
 
@@ -309,7 +310,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('No user data and not fetching, setting user to null.');
       setUser(null);
     }
-    setIsLoading(userQuery.isLoading);
+    setIsHydrating(userQuery.isLoading);
   }, [userQuery.data, userQuery.isLoading, userQuery.isFetching, userQuery.error, authToken]);
 
   const login = useCallback(async (email: string, password: string): Promise<UserRole> => {
@@ -388,10 +389,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       user,
       isLoading:
-        isLoading ||
+        isHydrating ||
         loginMutation.isPending ||
         googleLoginMutation.isPending ||
         handoffLoginMutation.isPending,
+      isHydrating,
       isAuthenticated: Boolean(user),
       isAdmin: user?.role === 'admin',
       login,
@@ -402,7 +404,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }),
     [
       user,
-      isLoading,
+      isHydrating,
       loginMutation.isPending,
       googleLoginMutation.isPending,
       handoffLoginMutation.isPending,
