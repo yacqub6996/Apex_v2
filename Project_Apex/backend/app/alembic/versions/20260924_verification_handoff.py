@@ -1,6 +1,6 @@
 """add email verification handoff and resend attempt tables
 
-Revision ID: 20260924_email_verification_handoff
+Revision ID: 20260924_verification_handoff
 Revises: 20260922_notification_idemp
 Create Date: 2026-09-24 00:00:00.000000
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20260924_email_verification_handoff"
+revision = "20260924_verification_handoff"
 down_revision = "20260922_notification_idemp"
 branch_labels = None
 depends_on = None
