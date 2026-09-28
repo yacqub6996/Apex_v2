@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     VERIFICATION_RESEND_IP_MAX: int = 5
     VERIFICATION_RESEND_IP_WINDOW_SECONDS: int = 900
     POST_VERIFICATION_HANDOFF_TTL_SECONDS: int = 300
+    VERIFICATION_REMINDER_HOUR_UTC: int = 9
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -21,6 +21,7 @@ from app.models import (
     EmailVerificationAttempt,
     EmailVerificationAttemptOutcome,
     EmailVerificationHandoff,
+    KycStatus,
     User,
     UserCreate,
     VerificationHandoffStatus,
@@ -34,7 +35,9 @@ GENERIC_RESEND_MESSAGE = (
 )
 
 
-def _create_user(db: Session, *, verified: bool = False) -> tuple[User, str, str]:
+def _create_user(
+    db: Session, *, verified: bool = False, kyc_approved: bool = False
+) -> tuple[User, str, str]:
     email = random_email()
     password = random_lower_string()
     user = crud.create_user(
@@ -43,6 +46,9 @@ def _create_user(db: Session, *, verified: bool = False) -> tuple[User, str, str
     if verified:
         user.email_verified = True
         user.email_verified_at = utc_now()
+    if kyc_approved:
+        user.kyc_status = KycStatus.APPROVED
+    if verified or kyc_approved:
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -66,22 +72,18 @@ def _clear_resend_attempts(db: Session) -> None:
 # --- Login semantics -------------------------------------------------------
 
 
-def test_login_unverified_with_emails_enabled_returns_machine_readable_code(
+def test_login_unverified_with_emails_enabled_succeeds(
     client: TestClient, db: Session
 ) -> None:
+    """Unverified accounts may log in; verification is no longer a login gate."""
     _, email, password = _create_user(db, verified=False)
     with _enable_emails()[0], _enable_emails()[1]:
         r = client.post(
             f"{settings.API_V1_STR}/login/access-token",
             data={"username": email, "password": password},
         )
-    assert r.status_code == 403
-    assert r.json() == {
-        "detail": {
-            "code": "EMAIL_NOT_VERIFIED",
-            "message": "Email not verified. Please check your inbox for the verification link.",
-        }
-    }
+    assert r.status_code == 200
+    assert "access_token" in r.json()
 
 
 def test_login_unverified_with_emails_disabled_succeeds(

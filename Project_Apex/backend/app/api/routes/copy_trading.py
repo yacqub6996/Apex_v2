@@ -14,7 +14,7 @@ from pydantic import ValidationError, computed_field
 from sqlalchemy import desc
 from sqlmodel import Session, SQLModel, col, func, select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, ensure_withdrawal_verification
 from app.core import security
 from app.core.db import engine
 from app.core.time import utc_now
@@ -700,20 +700,8 @@ async def request_copy_trading_withdrawal(
     current_user: CurrentUser,
     payload: CopyTradingWithdrawalRequest,
 ) -> CopyTradingWithdrawalResponse:
-    # KYC gate: withdrawals require APPROVED status
-    try:
-        from app.models import KycStatus  # local import to avoid circulars
-
-        if current_user.kyc_status != KycStatus.APPROVED:
-            raise HTTPException(
-                status_code=403, detail="Withdrawals require KYC approval"
-            )
-    except Exception:
-        # If enum comparison fails for any reason, fall back to string check
-        if getattr(current_user, "kyc_status", None) not in ("APPROVED",):
-            raise HTTPException(
-                status_code=403, detail="Withdrawals require KYC approval"
-            )
+    # Verification gate: withdrawals require email verification + KYC approval
+    ensure_withdrawal_verification(current_user)
     # Validate amount
     try:
         amount = round(float(payload.amount or 0), 2)

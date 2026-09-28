@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-const { mockLogin, mockResendVerification } = vi.hoisted(() => ({
+const { mockLogin } = vi.hoisted(() => ({
   mockLogin: vi.fn(),
-  mockResendVerification: vi.fn(),
 }));
 
 vi.mock('@/providers/auth-provider', () => ({
@@ -31,73 +30,15 @@ vi.mock('@/providers/auth-provider', () => ({
   }),
 }));
 
-vi.mock('@/services/email-verification-service', () => ({
-  EmailVerificationService: {
-    requestVerification: vi.fn(),
-    resendVerification: mockResendVerification,
-    verifyEmail: vi.fn(),
-  },
-}));
-
 import { AuthLoginError } from '@/providers/auth-provider';
 import { LoginSplitCarousel } from '@/components/shared-assets/login/login-split-carousel';
 
-describe('LoginSplitCarousel verification-required state', () => {
+describe('LoginSplitCarousel error states', () => {
   beforeEach(() => {
     mockLogin.mockReset();
-    mockResendVerification.mockReset();
   });
 
-  it('renders the verification-required state when login returns EMAIL_NOT_VERIFIED', async () => {
-    mockLogin.mockRejectedValueOnce(
-      new AuthLoginError(
-        'EMAIL_NOT_VERIFIED',
-        'Email not verified. Please check your inbox for the verification link.',
-        'jordan@example.com',
-      ),
-    );
-
-    render(<LoginSplitCarousel />);
-
-    fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Verify your email')).toBeInTheDocument();
-    });
-    expect(screen.getByText(/j•••••••••••••••@example\.com|j.*@example\.com/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Resend verification' })).toBeInTheDocument();
-  });
-
-  it('resends the verification email and shows inline success feedback', async () => {
-    mockLogin.mockRejectedValueOnce(
-      new AuthLoginError('EMAIL_NOT_VERIFIED', 'Email not verified', 'jordan@example.com'),
-    );
-    mockResendVerification.mockResolvedValueOnce({
-      message: 'If an account with that email exists and is not verified, a verification email has been sent.',
-    });
-
-    render(<LoginSplitCarousel />);
-
-    fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Resend verification' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Resend verification' }));
-
-    await waitFor(() => {
-      expect(mockResendVerification).toHaveBeenCalledWith('jordan@example.com');
-      expect(screen.getByText('Verification email sent — check your inbox.')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('button', { name: /Resend in \d+s/ })).toBeInTheDocument();
-  });
-
-  it('keeps invalid credentials in the generic error state without resend UI', async () => {
+  it('shows the generic credentials error when login returns INVALID_CREDENTIALS', async () => {
     mockLogin.mockRejectedValueOnce(
       new AuthLoginError('INVALID_CREDENTIALS', 'Incorrect email or password', 'jordan@example.com'),
     );
@@ -115,34 +56,38 @@ describe('LoginSplitCarousel verification-required state', () => {
     expect(screen.queryByRole('button', { name: 'Resend verification' })).not.toBeInTheDocument();
   });
 
-  it('returns to the verification-required state after going back to login and retrying unverified credentials', async () => {
-    mockLogin.mockRejectedValue(
+  it('shows the inactive-account error when login returns INACTIVE_ACCOUNT', async () => {
+    mockLogin.mockRejectedValueOnce(
+      new AuthLoginError('INACTIVE_ACCOUNT', 'Inactive user', 'jordan@example.com'),
+    );
+
+    render(<LoginSplitCarousel />);
+
+    fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Inactive user')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Contact support/i)).toBeInTheDocument();
+  });
+
+  it('renders a legacy EMAIL_NOT_VERIFIED detail as a plain error without a verification state', async () => {
+    mockLogin.mockRejectedValueOnce(
       new AuthLoginError('EMAIL_NOT_VERIFIED', 'Email not verified', 'jordan@example.com'),
     );
 
     render(<LoginSplitCarousel />);
 
-    const submitUnverifiedLogin = async () => {
-      fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
-      fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Resend verification' })).toBeInTheDocument();
-      });
-    };
+    fireEvent.change(screen.getByPlaceholderText('Enter your email'), { target: { value: 'jordan@example.com' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    await submitUnverifiedLogin();
-
-    // Return to the sign-in form.
-    fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+      expect(screen.getByText('Email not verified')).toBeInTheDocument();
     });
-
-    // Attempting the same unverified credentials must bring the user back
-    // into the verification-required state, not silently refresh the page.
-    await submitUnverifiedLogin();
-    expect(screen.getByText('Verify your email')).toBeInTheDocument();
-    expect(mockLogin).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Verify your email')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resend verification' })).not.toBeInTheDocument();
   });
 });

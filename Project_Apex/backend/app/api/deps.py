@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core import security
 from app.core.config import settings
 from app.core.db import engine
-from app.models import TokenPayload, User, UserRole
+from app.models import KycStatus, TokenPayload, User, UserRole
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -58,6 +58,14 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def ensure_withdrawal_verification(current_user: User) -> None:
+    """Require both email verification and approved KYC before withdrawals."""
+    if not current_user.email_verified:
+        raise HTTPException(status_code=403, detail="Withdrawals require email verification")
+    if current_user.kyc_status != KycStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Withdrawals require KYC approval")
 
 
 def get_current_active_superuser(current_user: CurrentUser) -> User:

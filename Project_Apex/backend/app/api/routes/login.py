@@ -142,14 +142,8 @@ def login_access_token(
         raise _auth_error(400, "INVALID_CREDENTIALS", "Incorrect email or password")
     if not user.is_active:
         raise _auth_error(400, "INACTIVE_ACCOUNT", "Inactive user")
-    # Only enforce email verification when an email provider is configured.
-    # In environments without outbound email, allow login without verification.
-    if settings.emails_enabled and not user.email_verified:
-        raise _auth_error(
-            403,
-            "EMAIL_NOT_VERIFIED",
-            "Email not verified. Please check your inbox for the verification link.",
-        )
+    # Email verification is no longer a login gate. Unverified accounts may
+    # access the platform; only withdrawals remain gated on verification.
     previous_login = user.last_login_at
     token = _issue_access_token_for_user(user)
     user.last_login_at = utc_now()
@@ -219,8 +213,6 @@ def login_with_google(session: SessionDep, request: Request, body: dict[str, str
     if email_verified:
         user.email_verified = True
         user.email_verified_at = utc_now()
-    if not user.email_verified:
-        raise HTTPException(status_code=403, detail="Email not verified. Please confirm your Google account email and try again.")
     previous_login = user.last_login_at
     user.last_login_at = utc_now()
     session.add(user)

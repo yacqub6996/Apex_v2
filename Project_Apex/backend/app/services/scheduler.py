@@ -17,6 +17,7 @@ class SchedulerLike(Protocol):
 from app.core.config import settings
 from app.core.db import engine
 from app.services.long_term_worker import process_mature_investments
+from app.services.verification_reminders import send_verification_reminders
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,18 @@ class SchedulerService:
             name='Scheduler Health Check',
             replace_existing=True
         )
-        
+
+        # Daily email verification reminders
+        self.scheduler.add_job(
+            func=run_verification_reminder_job,
+            trigger='cron',
+            hour=settings.VERIFICATION_REMINDER_HOUR_UTC, minute=0, second=0,
+            id='email_verification_reminders',
+            name='Daily Email Verification Reminders',
+            replace_existing=True,
+            max_instances=1
+        )
+
         logger.info("Scheduled jobs added to APScheduler")
 
     
@@ -177,6 +189,16 @@ async def run_maturity_processing_job() -> None:
         logger.info(f"Maturity processing completed: {result}")
     except Exception as e:
         logger.error(f"Maturity processing failed: {e}", exc_info=True)
+
+
+async def run_verification_reminder_job() -> None:
+    """Async job entrypoint for daily email-verification reminders."""
+    try:
+        logger.info("Starting scheduled email verification reminders")
+        sent = await send_verification_reminders()
+        logger.info(f"Email verification reminders completed: {sent} sent")
+    except Exception as e:
+        logger.error(f"Email verification reminders failed: {e}", exc_info=True)
 
 
 def scheduler_health_check_job() -> None:

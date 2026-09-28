@@ -25,6 +25,7 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { KycStatusBanner } from "@/components/dashboard/kyc-status-banner";
+import { EmailVerificationBanner } from "@/components/dashboard/email-verification-banner";
 import { useAuth } from "@/providers/auth-provider";
 import { UsersService } from "@/api/services/UsersService";
 import { PerformanceService } from "@/api/services/PerformanceService";
@@ -949,6 +950,7 @@ export const UserDashboard = ({ children }: { children?: ReactNode }) => {
                 user={userInfo}
                 onLogout={logout}
             >
+                <EmailVerificationBanner />
                 {content}
             </MaterialDashboardLayout>
         </>

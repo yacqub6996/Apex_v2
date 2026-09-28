@@ -231,6 +231,7 @@ class User(UserBase, table=True):
     # Email verification
     email_verified: bool = Field(default=False)
     email_verified_at: datetime | None = Field(default=None)
+    last_verification_reminder_sent_at: datetime | None = Field(default=None)
     failed_login_attempts: int = Field(default=0)
     account_locked_until: datetime | None = Field(default=None)
     # Notification preferences

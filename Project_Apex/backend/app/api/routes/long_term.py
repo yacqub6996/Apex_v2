@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlmodel import SQLModel, select, Field
 from enum import Enum
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, ensure_withdrawal_verification
 from app.api.routes.errors import LongTermMaximumDepositViolation
 from app.models import (
     CopyStatus,
@@ -464,14 +464,8 @@ async def subscribe_to_long_term_plan(
 async def request_long_term_withdrawal(
     *, session: SessionDep, current_user: CurrentUser, payload: WithdrawalRequest
 ) -> dict:
-    # KYC gate: withdrawals require APPROVED status
-    try:
-        from app.models import KycStatus
-        if current_user.kyc_status != KycStatus.APPROVED:
-            raise HTTPException(status_code=403, detail="Withdrawals require KYC approval")
-    except Exception:
-        if getattr(current_user, "kyc_status", None) not in ("APPROVED",):
-            raise HTTPException(status_code=403, detail="Withdrawals require KYC approval")
+    # Verification gate: withdrawals require email verification + KYC approval
+    ensure_withdrawal_verification(current_user)
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Withdrawal amount must be positive")
 
@@ -619,6 +613,9 @@ async def request_withdrawal_from_active_investment(
     payload: InvestmentWithdrawalRequest,
 ) -> dict:
     """Create a pending withdrawal request for an active long-term allocation."""
+
+    # Verification gate: withdrawals require email verification + KYC approval
+    ensure_withdrawal_verification(current_user)
 
     investment = session.get(UserLongTermInvestment, investment_id)
     if not investment or investment.user_id != current_user.id:
