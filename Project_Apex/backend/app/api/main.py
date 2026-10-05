@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     admin,
+    admin_crypto,
     admin_executions,
     admin_ledger,
     admin_long_term,
@@ -34,6 +35,7 @@ from app.core.config import settings
 api_router = APIRouter()
 api_router.include_router(login.router)
 api_router.include_router(admin.router)
+api_router.include_router(admin_crypto.router)
 api_router.include_router(admin_ledger.router)
 api_router.include_router(admin_long_term.router)
 api_router.include_router(admin_plans.router)

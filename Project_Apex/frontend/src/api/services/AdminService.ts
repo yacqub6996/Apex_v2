@@ -8,6 +8,9 @@ import { request as __request } from "../core/request";
 import type { AdminDashboardSummary } from "../models/AdminDashboardSummary";
 import type { ApproveCryptoDepositRequest } from "../models/ApproveCryptoDepositRequest";
 import type { ApproveCryptoDepositResponse } from "../models/ApproveCryptoDepositResponse";
+import type { CryptoDepositAddressPublic } from "../models/CryptoDepositAddressPublic";
+import type { CryptoDepositAddressUpdate } from "../models/CryptoDepositAddressUpdate";
+import type { CryptoDepositAddressesPublic } from "../models/CryptoDepositAddressesPublic";
 import type { ManualProfitRequest } from "../models/ManualProfitRequest";
 import type { ManualProfitResponse } from "../models/ManualProfitResponse";
 import type { SimulationTriggerRequest } from "../models/SimulationTriggerRequest";
@@ -99,6 +102,40 @@ export class AdminService {
             query: {
                 reason: reason,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get All Deposit Addresses
+     * Get all configured platform deposit addresses (Admin only)
+     * @returns CryptoDepositAddressesPublic Successful Response
+     * @throws ApiError
+     */
+    public static adminGetAllDepositAddresses(): CancelablePromise<CryptoDepositAddressesPublic> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/admin/crypto-addresses",
+        });
+    }
+    /**
+     * Update Deposit Address
+     * Update a platform deposit address (Admin only)
+     * @param addressId
+     * @param requestBody
+     * @returns CryptoDepositAddressPublic Successful Response
+     * @throws ApiError
+     */
+    public static adminUpdateDepositAddress(addressId: string, requestBody: CryptoDepositAddressUpdate): CancelablePromise<CryptoDepositAddressPublic> {
+        return __request(OpenAPI, {
+            method: "PUT",
+            url: "/api/v1/admin/crypto-addresses/{address_id}",
+            path: {
+                address_id: addressId,
+            },
+            body: requestBody,
+            mediaType: "application/json",
             errors: {
                 422: `Validation Error`,
             },

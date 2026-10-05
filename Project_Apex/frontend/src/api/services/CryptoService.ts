@@ -79,7 +79,7 @@ export class CryptoService {
     }
     /**
      * Get Pending Deposits
-     * Get user's pending deposit transactions
+     * Get user's pending deposit transactions with authoritative fresh cache headers
      * @returns TransactionPublic Successful Response
      * @throws ApiError
      */

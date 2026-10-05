@@ -1375,3 +1375,50 @@ class SupportAttachment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now, index=True)
     payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
 
+
+# =============================================================================
+# Crypto Deposit Address Management
+# =============================================================================
+
+class CryptoDepositAddressBase(SQLModel):
+    coin: str = Field(index=True, max_length=20)
+    network: str = Field(index=True, max_length=50)
+    address: str = Field(max_length=255)
+    memo: str | None = Field(default=None, max_length=100)
+    is_active: bool = Field(default=True, index=True)
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class CryptoDepositAddressCreate(CryptoDepositAddressBase):
+    pass
+
+
+class CryptoDepositAddressUpdate(SQLModel):
+    address: str | None = Field(default=None, max_length=255)
+    memo: str | None = Field(default=None, max_length=100)
+    is_active: bool | None = None
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class CryptoDepositAddress(CryptoDepositAddressBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column_kwargs={"onupdate": utc_now},
+    )
+    updated_by_id: uuid.UUID | None = Field(default=None, foreign_key="user.id", nullable=True)
+
+
+class CryptoDepositAddressPublic(CryptoDepositAddressBase):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    updated_by_id: uuid.UUID | None = None
+    updated_by_email: str | None = None
+
+
+class CryptoDepositAddressesPublic(SQLModel):
+    data: list[CryptoDepositAddressPublic]
+    count: int
+

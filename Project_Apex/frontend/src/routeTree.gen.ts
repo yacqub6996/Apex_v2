@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as PlansRouteImport } from './routes/plans'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
@@ -27,7 +28,6 @@ import { Route as DashboardExecutionsRouteImport } from './routes/dashboard/exec
 import { Route as DashboardCopyTradingRouteImport } from './routes/dashboard/copy-trading'
 import { Route as DashboardAccountRouteImport } from './routes/dashboard/account'
 import { Route as AuthResetRouteImport } from './routes/auth/reset'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminTraderManagerRouteImport } from './routes/admin/trader-manager'
 import { Route as AdminPlanManagerRouteImport } from './routes/admin/plan-manager'
@@ -35,6 +35,7 @@ import { Route as AdminLongTermRouteImport } from './routes/admin/long-term'
 import { Route as AdminLedgerHistoryRouteImport } from './routes/admin/ledger-history'
 import { Route as AdminKycReviewRouteImport } from './routes/admin/kyc-review'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
+import { Route as AdminCryptoWalletsRouteImport } from './routes/admin/crypto-wallets'
 import { Route as AdminBalanceAdjustmentRouteImport } from './routes/admin/balance-adjustment'
 import { Route as AdminKycReviewUserIdRouteImport } from './routes/admin/kyc-review.$userId'
 
@@ -51,6 +52,11 @@ const SupportRoute = SupportRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
@@ -128,11 +134,6 @@ const AuthResetRoute = AuthResetRouteImport.update({
   path: '/auth/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
@@ -168,6 +169,11 @@ const AdminDashboardRoute = AdminDashboardRouteImport.update({
   path: '/admin/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCryptoWalletsRoute = AdminCryptoWalletsRouteImport.update({
+  id: '/admin/crypto-wallets',
+  path: '/admin/crypto-wallets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminBalanceAdjustmentRoute = AdminBalanceAdjustmentRouteImport.update({
   id: '/admin/balance-adjustment',
   path: '/admin/balance-adjustment',
@@ -190,10 +196,12 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/plans': typeof PlansRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/balance-adjustment': typeof AdminBalanceAdjustmentRoute
+  '/admin/crypto-wallets': typeof AdminCryptoWalletsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/kyc-review': typeof AdminKycReviewRouteWithChildren
   '/admin/ledger-history': typeof AdminLedgerHistoryRoute
@@ -202,7 +210,6 @@ export interface FileRoutesByFullPath {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -220,10 +227,12 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/plans': typeof PlansRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/balance-adjustment': typeof AdminBalanceAdjustmentRoute
+  '/admin/crypto-wallets': typeof AdminCryptoWalletsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/kyc-review': typeof AdminKycReviewRouteWithChildren
   '/admin/ledger-history': typeof AdminLedgerHistoryRoute
@@ -232,7 +241,6 @@ export interface FileRoutesByTo {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -251,10 +259,12 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/plans': typeof PlansRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/admin/balance-adjustment': typeof AdminBalanceAdjustmentRoute
+  '/admin/crypto-wallets': typeof AdminCryptoWalletsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/kyc-review': typeof AdminKycReviewRouteWithChildren
   '/admin/ledger-history': typeof AdminLedgerHistoryRoute
@@ -263,7 +273,6 @@ export interface FileRoutesById {
   '/admin/trader-manager': typeof AdminTraderManagerRoute
   '/admin/users': typeof AdminUsersRoute
   '/auth/reset': typeof AuthResetRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/copy-trading': typeof DashboardCopyTradingRoute
   '/dashboard/executions': typeof DashboardExecutionsRoute
@@ -283,10 +292,12 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/plans'
     | '/privacy-policy'
+    | '/reset-password'
     | '/signup'
     | '/support'
     | '/verify-email'
     | '/admin/balance-adjustment'
+    | '/admin/crypto-wallets'
     | '/admin/dashboard'
     | '/admin/kyc-review'
     | '/admin/ledger-history'
@@ -295,7 +306,6 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
-    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -313,10 +323,12 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/plans'
     | '/privacy-policy'
+    | '/reset-password'
     | '/signup'
     | '/support'
     | '/verify-email'
     | '/admin/balance-adjustment'
+    | '/admin/crypto-wallets'
     | '/admin/dashboard'
     | '/admin/kyc-review'
     | '/admin/ledger-history'
@@ -325,7 +337,6 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
-    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -343,10 +354,12 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/plans'
     | '/privacy-policy'
+    | '/reset-password'
     | '/signup'
     | '/support'
     | '/verify-email'
     | '/admin/balance-adjustment'
+    | '/admin/crypto-wallets'
     | '/admin/dashboard'
     | '/admin/kyc-review'
     | '/admin/ledger-history'
@@ -355,7 +368,6 @@ export interface FileRouteTypes {
     | '/admin/trader-manager'
     | '/admin/users'
     | '/auth/reset'
-    | '/reset-password'
     | '/dashboard/account'
     | '/dashboard/copy-trading'
     | '/dashboard/executions'
@@ -374,10 +386,12 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PlansRoute: typeof PlansRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   SupportRoute: typeof SupportRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AdminBalanceAdjustmentRoute: typeof AdminBalanceAdjustmentRoute
+  AdminCryptoWalletsRoute: typeof AdminCryptoWalletsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminKycReviewRoute: typeof AdminKycReviewRouteWithChildren
   AdminLedgerHistoryRoute: typeof AdminLedgerHistoryRoute
@@ -386,7 +400,6 @@ export interface RootRouteChildren {
   AdminTraderManagerRoute: typeof AdminTraderManagerRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AuthResetRoute: typeof AuthResetRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -410,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy-policy': {
@@ -517,13 +537,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthResetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/users': {
       id: '/admin/users'
       path: '/admin/users'
@@ -571,6 +584,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/dashboard'
       fullPath: '/admin/dashboard'
       preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/crypto-wallets': {
+      id: '/admin/crypto-wallets'
+      path: '/admin/crypto-wallets'
+      fullPath: '/admin/crypto-wallets'
+      preLoaderRoute: typeof AdminCryptoWalletsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/balance-adjustment': {
@@ -631,10 +651,12 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PlansRoute: PlansRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   SupportRoute: SupportRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AdminBalanceAdjustmentRoute: AdminBalanceAdjustmentRoute,
+  AdminCryptoWalletsRoute: AdminCryptoWalletsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminKycReviewRoute: AdminKycReviewRouteWithChildren,
   AdminLedgerHistoryRoute: AdminLedgerHistoryRoute,
@@ -643,7 +665,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminTraderManagerRoute: AdminTraderManagerRoute,
   AdminUsersRoute: AdminUsersRoute,
   AuthResetRoute: AuthResetRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

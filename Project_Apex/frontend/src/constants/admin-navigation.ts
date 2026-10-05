@@ -5,6 +5,7 @@ import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import TrendingUpOutlinedIcon from "@mui/icons-material/TrendingUpOutlined";
 import HistoryIcon from "@mui/icons-material/History";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import type { MaterialDashboardNavItem } from "@/components/layouts/material-dashboard";
 
 /**
@@ -14,7 +15,7 @@ import type { MaterialDashboardNavItem } from "@/components/layouts/material-das
  * Navigation is organized by feature group:
  * 1. Overview - Main dashboard
  * 2. User Management - Users, KYC Review
- * 3. Trading Operations - Trader Manager, Balance Adjustment
+ * 3. Trading Operations - Trader Manager, Balance Adjustment, Deposit Wallets
  * 4. Investment Management - Long-Term Plans
  * 5. Audit & History - Ledger History
  * 6. Quick Access - User Dashboard link
@@ -30,6 +31,7 @@ export const ADMIN_NAVIGATION: MaterialDashboardNavItem[] = [
   // Trading Operations
   { label: "Trader Manager", to: "/admin/trader-manager", icon: ManageAccountsOutlinedIcon },
   { label: "Balance Adjustment", to: "/admin/balance-adjustment", icon: PaymentsOutlinedIcon },
+  { label: "Deposit Wallets", to: "/admin/crypto-wallets", icon: AccountBalanceWalletOutlinedIcon },
   
   // Investment Management
   { label: "Long-Term Plans", to: "/admin/long-term", icon: TrendingUpOutlinedIcon },

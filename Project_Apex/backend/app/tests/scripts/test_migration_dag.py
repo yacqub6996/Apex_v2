@@ -16,7 +16,7 @@ def test_migration_dag_single_head() -> None:
         len(heads) == 1
     ), f"Expected exactly 1 migration head, found {len(heads)}: {heads}"
     head_rev = heads[0]
-    assert head_rev == "20260922_notification_idemp", f"Unexpected head revision: {head_rev}"
+    assert head_rev == "20261005_crypto_addresses", f"Unexpected head revision: {head_rev}"
 
     all_revs = {r.revision for r in script.walk_revisions()}
     assert (
@@ -28,6 +28,14 @@ def test_migration_dag_single_head() -> None:
     assert (
         "20260922_notification_idemp" in all_revs
     ), "Forward migration 20260922_notification_idemp missing"
+    assert (
+        "20261005_crypto_addresses" in all_revs
+    ), "Forward migration 20261005_crypto_addresses missing"
+
+    crypto_addrs = script.get_revision("20261005_crypto_addresses")
+    assert (
+        crypto_addrs.down_revision == "20260928_verif_reminder_track"
+    ), "Crypto addresses migration must follow 20260928_verif_reminder_track"
 
     preferences = script.get_revision("20260922_notification_prefs")
     assert (

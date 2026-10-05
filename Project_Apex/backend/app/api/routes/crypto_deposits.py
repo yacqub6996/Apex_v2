@@ -11,6 +11,7 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.core.time import utc_now
 from app.models import (
+    CryptoDepositAddress,
     Transaction,
     TransactionPublic,
     TransactionStatus,
@@ -211,8 +212,22 @@ async def generate_deposit_address(
         coin = request.coin
         network = request.network
 
-    # Global BTC address resolution across both normal deposits and commission deposits:
-    if coin == "BTC" and network == "BITCOIN":
+    # 1. First, check if there is an active admin-configured deposit address in the database
+    db_address = session.exec(
+        select(CryptoDepositAddress).where(
+            CryptoDepositAddress.coin == coin,
+            CryptoDepositAddress.network == network,
+            CryptoDepositAddress.is_active,
+        )
+    ).first()
+
+    if db_address and db_address.address and db_address.address.strip():
+        address = db_address.address.strip()
+        memo = db_address.memo
+        if not memo and coin in MEMO_REQUIRED_COINS:
+            memo = f"MEMO{uuid.uuid4().hex[:8].upper()}"
+    elif coin == "BTC" and network == "BITCOIN":
+        # Global BTC address resolution across both normal deposits and commission deposits:
         address = settings.GLOBAL_BTC_DEPOSIT_ADDRESS or settings.COPY_TRADING_COMMISSION_BTC_ADDRESS
         if not address:
             err_detail = (
