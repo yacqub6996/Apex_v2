@@ -14,7 +14,7 @@ export type CopiedTraderSummary = {
     performance: string;
     win_rate: string;
     avatar_url?: string | null;
-    copy_fee_percentage: number;
+    copy_fee_percentage?: number;
     copy_id: string;
     allocation: number;
     status: CopyStatus;

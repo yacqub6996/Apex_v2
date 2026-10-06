@@ -187,6 +187,86 @@ def test_update_deposit_address_and_deposit_generation_flow(db_session: Session)
     assert gen_res2.address == "TQ2DeM0Addr3ss111111111111111111111111"
 
 
+def test_create_custom_crypto_coin_and_available_coins_flow(db_session: Session):
+    from app.api.routes.admin_crypto import create_deposit_address
+    from app.api.routes.crypto_deposits import get_available_coins
+    from app.models import CryptoDepositAddressCreate
+    import asyncio
+
+    admin = User(
+        id=uuid.uuid4(),
+        email="admin2@example.com",
+        hashed_password="fakehashedpassword",
+        is_superuser=True,
+        role=UserRole.ADMIN,
+    )
+    db_session.add(admin)
+
+    user = User(
+        id=uuid.uuid4(),
+        email="user2@example.com",
+        hashed_password="fakehashedpassword",
+        is_superuser=False,
+        role=UserRole.USER,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    # 1. Non-admin cannot create
+    sol_payload = CryptoDepositAddressCreate(
+        coin="SOL",
+        network="SOLANA",
+        address="7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+        display_name="Solana",
+        coingecko_id="solana",
+        fallback_rate=150.0,
+    )
+    with pytest.raises(HTTPException) as exc:
+        create_deposit_address(session=db_session, current_user=user, payload=sol_payload)
+    assert exc.value.status_code == 403
+
+    # 2. Invalid Solana address raises 400
+    invalid_sol = CryptoDepositAddressCreate(
+        coin="SOL",
+        network="SOLANA",
+        address="0xInvalidSolanaAddress",
+    )
+    with pytest.raises(HTTPException) as exc2:
+        create_deposit_address(session=db_session, current_user=admin, payload=invalid_sol)
+    assert exc2.value.status_code == 400
+
+    # 3. Admin creates valid SOL address
+    created = create_deposit_address(session=db_session, current_user=admin, payload=sol_payload)
+    assert created.coin == "SOL"
+    assert created.network == "SOLANA"
+    assert created.display_name == "Solana"
+    assert created.coingecko_id == "solana"
+    assert created.fallback_rate == 150.0
+    assert created.address == "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+
+    # 4. Duplicate creation raises 400
+    with pytest.raises(HTTPException) as exc3:
+        create_deposit_address(session=db_session, current_user=admin, payload=sol_payload)
+    assert exc3.value.status_code == 400
+
+    # 5. Check get_available_coins includes SOL
+    coins = get_available_coins(session=db_session, current_user=user)
+    sol_coin = next((c for c in coins if c.coin == "SOL"), None)
+    assert sol_coin is not None
+    assert sol_coin.display_name == "Solana"
+    assert len(sol_coin.networks) == 1
+    assert sol_coin.networks[0].key == "SOLANA"
+
+    # 6. User generates deposit address for SOL
+    req = GenerateAddressRequest(
+        coin="SOL",
+        network="SOLANA",
+        usd_amount=75.0,
+    )
+    gen = asyncio.run(generate_deposit_address(session=db_session, current_user=user, request=req))
+    assert gen.address == "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+
+
 if __name__ == "__main__":
     engine = create_engine(
         "sqlite:///:memory:",
@@ -201,4 +281,7 @@ if __name__ == "__main__":
         print("test_get_deposit_addresses_permissions passed!")
         test_update_deposit_address_and_deposit_generation_flow(session)
         print("test_update_deposit_address_and_deposit_generation_flow passed!")
+        test_create_custom_crypto_coin_and_available_coins_flow(session)
+        print("test_create_custom_crypto_coin_and_available_coins_flow passed!")
         print("ALL ADMIN CRYPTO TESTS PASSED SUCCESSFULLY!")
+

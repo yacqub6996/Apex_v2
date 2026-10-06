@@ -1387,6 +1387,9 @@ class CryptoDepositAddressBase(SQLModel):
     memo: str | None = Field(default=None, max_length=100)
     is_active: bool = Field(default=True, index=True)
     notes: str | None = Field(default=None, max_length=255)
+    display_name: str | None = Field(default=None, max_length=100)
+    coingecko_id: str | None = Field(default=None, max_length=100)
+    fallback_rate: float | None = Field(default=None)
 
 
 class CryptoDepositAddressCreate(CryptoDepositAddressBase):
@@ -1394,10 +1397,15 @@ class CryptoDepositAddressCreate(CryptoDepositAddressBase):
 
 
 class CryptoDepositAddressUpdate(SQLModel):
+    coin: str | None = Field(default=None, max_length=20)
+    network: str | None = Field(default=None, max_length=50)
     address: str | None = Field(default=None, max_length=255)
     memo: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
     notes: str | None = Field(default=None, max_length=255)
+    display_name: str | None = Field(default=None, max_length=100)
+    coingecko_id: str | None = Field(default=None, max_length=100)
+    fallback_rate: float | None = Field(default=None)
 
 
 class CryptoDepositAddress(CryptoDepositAddressBase, table=True):
@@ -1421,4 +1429,22 @@ class CryptoDepositAddressPublic(CryptoDepositAddressBase):
 class CryptoDepositAddressesPublic(SQLModel):
     data: list[CryptoDepositAddressPublic]
     count: int
+
+
+class AvailableNetworkPublic(SQLModel):
+    key: str
+    label: str
+    chain_name: str
+    requires_memo: bool = False
+    fee_estimate: str | None = None
+    confirmation_time: str | None = None
+
+
+class AvailableCoinPublic(SQLModel):
+    coin: str
+    display_name: str
+    coingecko_id: str | None = None
+    fallback_rate: float | None = None
+    networks: list[AvailableNetworkPublic]
+
 

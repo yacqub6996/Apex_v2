@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type CryptoDepositAddressPublic = {
+export type CryptoDepositAddressCreate = {
     coin: string;
     network: string;
     address: string;
@@ -12,9 +12,4 @@ export type CryptoDepositAddressPublic = {
     display_name?: string | null;
     coingecko_id?: string | null;
     fallback_rate?: number | null;
-    id: string;
-    created_at: string;
-    updated_at: string;
-    updated_by_id?: string | null;
-    updated_by_email?: string | null;
 };

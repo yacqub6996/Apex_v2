@@ -6,17 +6,24 @@
 // Re-export generated types for convenience
 export type {
   NetworkInfo,
-  CryptoRates,
+  AvailableCoinPublic,
+  AvailableNetworkPublic,
+  CryptoDepositAddressCreate,
+  CryptoDepositAddressPublic,
   GenerateAddressRequest,
   GenerateAddressResponse,
   ConfirmPaymentRequest,
 } from '@/api'
 
-// Asset types
-export type Asset = 'BTC' | 'ETH' | 'USDT' | 'USDC'
+// CryptoRates mapping of coin symbol to USD price
+export type CryptoRates = Record<string, number>
 
-// Network types per asset
-export type NetworkKey = 'BITCOIN' | 'ETHEREUM_ERC20' | 'TRON_TRC20' | 'POLYGON'
+// Asset types: standard coins plus arbitrary custom coin symbols
+export type Asset = 'BTC' | 'ETH' | 'USDT' | 'USDC' | (string & {})
+
+// Network types per asset: standard networks plus arbitrary custom network keys
+export type NetworkKey = 'BITCOIN' | 'ETHEREUM_ERC20' | 'TRON_TRC20' | 'POLYGON' | (string & {})
+
 
 // Deposit session state (extends GenerateAddressResponse with computed properties)
 export interface DepositSession {

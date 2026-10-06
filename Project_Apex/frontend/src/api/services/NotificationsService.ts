@@ -25,7 +25,7 @@ export class NotificationsService {
      * @returns NotificationsPublic Successful Response
      * @throws ApiError
      */
-    public static notificationsGetNotifications(unreadOnly: boolean = false, limit: number = 50, offset: number = 0): CancelablePromise<NotificationsPublic> {
+    public static notificationsGetNotifications(unreadOnly: boolean = false, limit: number = 50, offset?: number): CancelablePromise<NotificationsPublic> {
         return __request(OpenAPI, {
             method: "GET",
             url: "/api/v1/notifications/",
@@ -52,8 +52,42 @@ export class NotificationsService {
         });
     }
     /**
+     * Get Notification Preferences
+     * Get the current user's persisted notification preferences.
+     * @returns UserNotificationPreferencesPublic Successful Response
+     * @throws ApiError
+     */
+    public static notificationsGetNotificationPreferences(): CancelablePromise<UserNotificationPreferencesPublic> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/notifications/preferences",
+        });
+    }
+    /**
+     * Update Notification Preferences
+     * Update the current user's persisted notification preferences.
+     * @param requestBody
+     * @returns UserNotificationPreferencesPublic Successful Response
+     * @throws ApiError
+     */
+    public static notificationsUpdateNotificationPreferences(
+        requestBody: UserNotificationPreferencesUpdate,
+    ): CancelablePromise<UserNotificationPreferencesPublic> {
+        return __request(OpenAPI, {
+            method: "PUT",
+            url: "/api/v1/notifications/preferences",
+            body: requestBody,
+            mediaType: "application/json",
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Update Notification
-     * Update a notification (mark as read/unread).
+     * Update a notification's read state.
+     *
+     * - **is_read**: True marks the notification as read; False marks it unread.
      * @param notificationId
      * @param requestBody
      * @returns NotificationPublic Successful Response
@@ -104,36 +138,15 @@ export class NotificationsService {
             url: "/api/v1/notifications/mark-all-read",
         });
     }
-    /**
-     * Get Notification Preferences
-     * Get the current user's persisted notification preferences.
-     * @returns UserNotificationPreferencesPublic Successful Response
-     * @throws ApiError
-     */
+
     public static notificationsGetPreferences(): CancelablePromise<UserNotificationPreferencesPublic> {
-        return __request(OpenAPI, {
-            method: "GET",
-            url: "/api/v1/notifications/preferences",
-        });
+        return this.notificationsGetNotificationPreferences();
     }
-    /**
-     * Update Notification Preferences
-     * Update the current user's persisted notification preferences.
-     * @param requestBody
-     * @returns UserNotificationPreferencesPublic Successful Response
-     * @throws ApiError
-     */
+
     public static notificationsUpdatePreferences(
         requestBody: UserNotificationPreferencesUpdate,
     ): CancelablePromise<UserNotificationPreferencesPublic> {
-        return __request(OpenAPI, {
-            method: "PUT",
-            url: "/api/v1/notifications/preferences",
-            body: requestBody,
-            mediaType: "application/json",
-            errors: {
-                422: `Validation Error`,
-            },
-        });
+        return this.notificationsUpdateNotificationPreferences(requestBody);
     }
 }
+

@@ -22,6 +22,8 @@ export type { app__api__routes__admin_simulations__WithdrawalRequest } from "./m
 export type { app__api__routes__long_term__WithdrawalRequest } from "./models/app__api__routes__long_term__WithdrawalRequest";
 export type { ApproveCryptoDepositRequest } from "./models/ApproveCryptoDepositRequest";
 export type { ApproveCryptoDepositResponse } from "./models/ApproveCryptoDepositResponse";
+export type { AvailableCoinPublic } from "./models/AvailableCoinPublic";
+export type { AvailableNetworkPublic } from "./models/AvailableNetworkPublic";
 export type { BalanceOverrideRequest } from "./models/BalanceOverrideRequest";
 export type { BalanceOverrideResponse } from "./models/BalanceOverrideResponse";
 export type { BalanceResponse } from "./models/BalanceResponse";
@@ -48,10 +50,10 @@ export type { CopyTradingWithdrawalRequest } from "./models/CopyTradingWithdrawa
 export type { CopyTradingWithdrawalResponse } from "./models/CopyTradingWithdrawalResponse";
 export type { CreateAdjustmentRequest } from "./models/CreateAdjustmentRequest";
 export type { CreateAdjustmentResponse } from "./models/CreateAdjustmentResponse";
+export type { CryptoDepositAddressCreate } from "./models/CryptoDepositAddressCreate";
 export type { CryptoDepositAddressesPublic } from "./models/CryptoDepositAddressesPublic";
 export type { CryptoDepositAddressPublic } from "./models/CryptoDepositAddressPublic";
 export type { CryptoDepositAddressUpdate } from "./models/CryptoDepositAddressUpdate";
-export type { CryptoRates } from "./models/CryptoRates";
 export type { DailyPerformanceCollection } from "./models/DailyPerformanceCollection";
 export type { DailyPerformanceCreate } from "./models/DailyPerformanceCreate";
 export type { DailyPerformancePublic } from "./models/DailyPerformancePublic";

@@ -18,7 +18,7 @@ import {
   Chip,
 } from '@mui/material'
 import LockIcon from '@mui/icons-material/Lock'
-import { useNetworks, useCryptoRates } from '@/services/crypto'
+import { useNetworks, useCryptoRates, useAvailableCoins } from '@/services/crypto'
 import type { Asset, NetworkKey } from '@/types/crypto'
 
 interface SettlementInfo {
@@ -40,7 +40,7 @@ interface DepositInputStepProps {
   settlementInfo?: SettlementInfo | null
 }
 
-const ASSETS: { value: Asset; label: string }[] = [
+const DEFAULT_ASSETS: { value: Asset; label: string }[] = [
   { value: 'BTC', label: 'Bitcoin (BTC)' },
   { value: 'ETH', label: 'Ethereum (ETH)' },
   { value: 'USDT', label: 'Tether (USDT)' },
@@ -58,6 +58,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   isCommission = false,
   settlementInfo,
 }) => {
+  const { data: availableCoins, isLoading: coinsLoading } = useAvailableCoins()
   const { data: networks, isLoading: networksLoading } = useNetworks()
   const { data: rates } = useCryptoRates()
 
@@ -70,15 +71,45 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
   const minAmount = isCommission ? 0.01 : 50
   const isValidAmount = usdAmount >= minAmount
 
-  // Filter networks by selected asset
-  const availableNetworks = networks?.filter((n) => {
-    // Map asset to supported networks
-    if (asset === 'BTC') return n.key === 'BITCOIN'
-    if (asset === 'ETH') return n.key === 'ETHEREUM_ERC20'
-    if (asset === 'USDT') return ['TRON_TRC20', 'ETHEREUM_ERC20', 'POLYGON'].includes(n.key)
-    if (asset === 'USDC') return ['POLYGON', 'ETHEREUM_ERC20'].includes(n.key)
-    return false
-  })
+  // Dynamic asset options based on active admin configurations
+  const assetOptions = React.useMemo(() => {
+    if (availableCoins && availableCoins.length > 0) {
+      return availableCoins.map((c) => ({
+        value: c.coin as Asset,
+        label: c.display_name ? `${c.display_name} (${c.coin})` : c.coin,
+      }))
+    }
+    return DEFAULT_ASSETS
+  }, [availableCoins])
+
+  // Filter networks by selected asset from active database configurations
+  const availableNetworks = React.useMemo(() => {
+    if (availableCoins && availableCoins.length > 0) {
+      const selectedCoinData = availableCoins.find((c) => c.coin === asset)
+      if (selectedCoinData && selectedCoinData.networks.length > 0) {
+        return selectedCoinData.networks
+      }
+    }
+    return (
+      networks?.filter((n) => {
+        if (asset === 'BTC') return n.key === 'BITCOIN'
+        if (asset === 'ETH') return n.key === 'ETHEREUM_ERC20'
+        if (asset === 'USDT') return ['TRON_TRC20', 'ETHEREUM_ERC20', 'POLYGON'].includes(n.key)
+        if (asset === 'USDC') return ['POLYGON', 'ETHEREUM_ERC20'].includes(n.key)
+        return false
+      }) || []
+    )
+  }, [availableCoins, asset, networks])
+
+  // Auto-select valid asset if current is not in active list
+  React.useEffect(() => {
+    if (!isCommission && assetOptions.length > 0) {
+      const currentValid = assetOptions.some((a) => a.value === asset)
+      if (!currentValid) {
+        onAssetChange(assetOptions[0].value)
+      }
+    }
+  }, [assetOptions, asset, onAssetChange, isCommission])
 
   // Auto-select first available network when asset changes
   React.useEffect(() => {
@@ -94,6 +125,7 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       }
     }
   }, [asset, availableNetworks, network, onNetworkChange, isCommission, onAssetChange])
+
 
   if (isCommission) {
     return (
@@ -272,14 +304,14 @@ export const DepositInputStep: React.FC<DepositInputStepProps> = ({
       </Box>
 
       {/* Asset Selection */}
-      <FormControl fullWidth size="small">
+      <FormControl fullWidth size="small" disabled={coinsLoading}>
         <InputLabel>Cryptocurrency</InputLabel>
         <Select
           value={asset}
           label="Cryptocurrency"
           onChange={(e) => onAssetChange(e.target.value as Asset)}
         >
-          {ASSETS.map((a) => (
+          {assetOptions.map((a) => (
             <MenuItem key={a.value} value={a.value}>
               {a.label}
             </MenuItem>

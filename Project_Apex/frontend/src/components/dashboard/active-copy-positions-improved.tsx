@@ -393,7 +393,7 @@ export const ActiveCopyPositionsImproved: React.FC = () => {
                         <Typography variant="caption" color="text.secondary">
                           {row.specialty}
                         </Typography>
-                        {row.copy_fee_percentage > 0 && (
+                        {(row.copy_fee_percentage ?? 0) > 0 && (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                             Commission {row.copy_fee_percentage}%
                           </Typography>

@@ -10,8 +10,8 @@ import type { CopyTradingAggregateResponse } from "../models/CopyTradingAggregat
 import type { CopyTradingHistoryResponse } from "../models/CopyTradingHistoryResponse";
 import type { CopyTradingStartRequest } from "../models/CopyTradingStartRequest";
 import type { CopyTradingStartResponse } from "../models/CopyTradingStartResponse";
-import type { CopyTradingSummaryResponse } from "../models/CopyTradingSummaryResponse";
 import type { CopyTradingStopPreviewResponse } from "../models/CopyTradingStopPreviewResponse";
+import type { CopyTradingSummaryResponse } from "../models/CopyTradingSummaryResponse";
 import type { CopyTradingUpdateResponse } from "../models/CopyTradingUpdateResponse";
 import type { CopyTradingWithdrawalRequest } from "../models/CopyTradingWithdrawalRequest";
 import type { CopyTradingWithdrawalResponse } from "../models/CopyTradingWithdrawalResponse";
@@ -149,25 +149,6 @@ export class CopyTradingService {
         });
     }
     /**
-     * Get Stop Copy Preview
-     * Return calculated settlement preview (profit, commission due, released equity, escrow holds) before stopping.
-     * @param copyId
-     * @returns CopyTradingStopPreviewResponse Successful Response
-     * @throws ApiError
-     */
-    public static copyTradingGetStopPreview(copyId: string): CancelablePromise<CopyTradingStopPreviewResponse> {
-        return __request(OpenAPI, {
-            method: "GET",
-            url: "/api/v1/copy-trading/copied/{copy_id}/stop-preview",
-            path: {
-                copy_id: copyId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Stop Copy Relationship
      * Stop a copy-trading relationship permanently for the current user.
      * @param copyId
@@ -178,6 +159,27 @@ export class CopyTradingService {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/copy-trading/copied/{copy_id}/stop",
+            path: {
+                copy_id: copyId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Copy Relationship Stop Preview
+     * Return an authoritative pre-stop settlement preview for a copy relationship.
+     *
+     * Reuses the exact same financial settlement rules as stop_copy_relationship without mutating state.
+     * @param copyId
+     * @returns CopyTradingStopPreviewResponse Successful Response
+     * @throws ApiError
+     */
+    public static copyTradingGetCopyRelationshipStopPreview(copyId: string): CancelablePromise<CopyTradingStopPreviewResponse> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/copy-trading/copied/{copy_id}/stop-preview",
             path: {
                 copy_id: copyId,
             },
@@ -220,7 +222,7 @@ export class CopyTradingService {
      * @returns CopyTradingUpdateResponse Successful Response
      * @throws ApiError
      */
-    public static copyTradingTopUpAllocation(copyId: string, requestBody: TopUpAllocationRequest): CancelablePromise<CopyTradingUpdateResponse> {
+    public static copyTradingTopUpCopyAllocation(copyId: string, requestBody: TopUpAllocationRequest): CancelablePromise<CopyTradingUpdateResponse> {
         return __request(OpenAPI, {
             method: "POST",
             url: "/api/v1/copy-trading/copied/{copy_id}/top-up",
@@ -307,4 +309,13 @@ export class CopyTradingService {
             },
         });
     }
+
+    public static copyTradingGetStopPreview(copyId: string): CancelablePromise<CopyTradingStopPreviewResponse> {
+        return this.copyTradingGetCopyRelationshipStopPreview(copyId);
+    }
+
+    public static copyTradingTopUpAllocation(copyId: string, requestBody: TopUpAllocationRequest): CancelablePromise<CopyTradingUpdateResponse> {
+        return this.copyTradingTopUpCopyAllocation(copyId, requestBody);
+    }
 }
+

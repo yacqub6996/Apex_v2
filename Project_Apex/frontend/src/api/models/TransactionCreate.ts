@@ -12,6 +12,7 @@ export type TransactionCreate = {
     status?: TransactionStatus;
     description?: string | null;
     long_term_investment_id?: string | null;
+    metadata_payload?: Record<string, any> | null;
     user_id?: string | null;
     withdrawal_source?: WithdrawalSource | null;
 };

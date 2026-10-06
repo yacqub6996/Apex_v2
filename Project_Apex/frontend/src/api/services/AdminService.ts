@@ -8,6 +8,7 @@ import { request as __request } from "../core/request";
 import type { AdminDashboardSummary } from "../models/AdminDashboardSummary";
 import type { ApproveCryptoDepositRequest } from "../models/ApproveCryptoDepositRequest";
 import type { ApproveCryptoDepositResponse } from "../models/ApproveCryptoDepositResponse";
+import type { CryptoDepositAddressCreate } from "../models/CryptoDepositAddressCreate";
 import type { CryptoDepositAddressPublic } from "../models/CryptoDepositAddressPublic";
 import type { CryptoDepositAddressUpdate } from "../models/CryptoDepositAddressUpdate";
 import type { CryptoDepositAddressesPublic } from "../models/CryptoDepositAddressesPublic";
@@ -117,6 +118,24 @@ export class AdminService {
         return __request(OpenAPI, {
             method: "GET",
             url: "/api/v1/admin/crypto-addresses",
+        });
+    }
+    /**
+     * Create Deposit Address
+     * Add a new cryptocurrency deposit address (Admin only)
+     * @param requestBody
+     * @returns CryptoDepositAddressPublic Successful Response
+     * @throws ApiError
+     */
+    public static adminCreateDepositAddress(requestBody: CryptoDepositAddressCreate): CancelablePromise<CryptoDepositAddressPublic> {
+        return __request(OpenAPI, {
+            method: "POST",
+            url: "/api/v1/admin/crypto-addresses",
+            body: requestBody,
+            mediaType: "application/json",
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

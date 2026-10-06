@@ -11,6 +11,8 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.core.time import utc_now
 from app.models import (
+    AvailableCoinPublic,
+    AvailableNetworkPublic,
     CryptoDepositAddress,
     Transaction,
     TransactionPublic,
@@ -28,8 +30,8 @@ router = APIRouter(prefix="/crypto", tags=["crypto"])
 
 # Request/Response Models
 class GenerateAddressRequest(BaseModel):
-    coin: str  # e.g., "USDT", "BTC", "ETH", "USDC"
-    network: str  # e.g., "TRON_TRC20", "ETHEREUM_ERC20", "BITCOIN"
+    coin: str  # e.g., "USDT", "BTC", "ETH", "USDC", "SOL"
+    network: str  # e.g., "TRON_TRC20", "ETHEREUM_ERC20", "BITCOIN", "SOLANA"
     usd_amount: float
     description: str | None = None
     metadata_payload: dict[str, Any] | None = None
@@ -56,10 +58,12 @@ class NetworkInfo(BaseModel):
 
 
 class CryptoRates(BaseModel):
-    BTC: float
-    ETH: float
-    USDT: float
-    USDC: float
+    model_config = {"extra": "allow"}
+
+    BTC: float = 60000.0
+    ETH: float = 3000.0
+    USDT: float = 1.0
+    USDC: float = 1.0
 
 
 # Default crypto to USD exchange rates (fallback if CoinGecko API fails)
@@ -79,7 +83,142 @@ DEMO_ADDRESSES = {
 }
 
 # Coins that require memo/tag
-MEMO_REQUIRED_COINS = {"XRP", "XLM", "EOS", "ATOM"}
+MEMO_REQUIRED_COINS = {"XRP", "XLM", "EOS", "ATOM", "TON", "TONCOIN"}
+
+
+def get_network_display_label(network: str) -> str:
+    labels = {
+        "BITCOIN": "Bitcoin",
+        "ETHEREUM_ERC20": "Ethereum (ERC20)",
+        "TRON_TRC20": "TRON (TRC20)",
+        "POLYGON": "Polygon",
+        "SOLANA": "Solana",
+        "RIPPLE": "Ripple (XRP)",
+        "BSC_BEP20": "BNB Smart Chain (BEP20)",
+        "LITECOIN": "Litecoin",
+        "DOGECOIN": "Dogecoin",
+        "TON": "The Open Network (TON)",
+        "ARBITRUM": "Arbitrum One",
+        "AVAX_C": "Avalanche C-Chain",
+        "OPTIMISM": "Optimism (OP)",
+        "BASE": "Base",
+    }
+    return labels.get(network.upper(), network)
+
+
+def get_chain_name(network: str) -> str:
+    chains = {
+        "BITCOIN": "Bitcoin",
+        "ETHEREUM_ERC20": "Ethereum",
+        "TRON_TRC20": "TRON",
+        "POLYGON": "Polygon",
+        "SOLANA": "Solana",
+        "RIPPLE": "Ripple",
+        "BSC_BEP20": "BNB Chain",
+        "LITECOIN": "Litecoin",
+        "DOGECOIN": "Dogecoin",
+        "TON": "TON",
+    }
+    return chains.get(network.upper(), network)
+
+
+def get_fee_estimate(network: str) -> str:
+    fees = {
+        "BITCOIN": "~$2-10",
+        "ETHEREUM_ERC20": "~$5-15",
+        "TRON_TRC20": "~$1",
+        "POLYGON": "~$0.50",
+        "SOLANA": "~$0.01",
+        "RIPPLE": "~$0.01",
+        "BSC_BEP20": "~$0.30",
+        "LITECOIN": "~$0.05",
+        "DOGECOIN": "~$0.10",
+        "TON": "~$0.05",
+    }
+    return fees.get(network.upper(), "~$1")
+
+
+def get_confirmation_time(network: str) -> str:
+    times = {
+        "BITCOIN": "10-60 minutes",
+        "ETHEREUM_ERC20": "5-15 minutes",
+        "TRON_TRC20": "1-3 minutes",
+        "POLYGON": "1-2 minutes",
+        "SOLANA": "< 1 minute",
+        "RIPPLE": "< 1 minute",
+        "BSC_BEP20": "1-2 minutes",
+        "LITECOIN": "2-10 minutes",
+        "DOGECOIN": "5-10 minutes",
+        "TON": "< 1 minute",
+    }
+    return times.get(network.upper(), "1-5 minutes")
+
+
+@router.get("/available-coins", response_model=list[AvailableCoinPublic])
+def get_available_coins(
+    session: SessionDep,
+    current_user: CurrentUser,  # noqa: ARG001
+) -> Any:
+    """Get list of all active coins and networks available for deposit"""
+    active_records = session.exec(
+        select(CryptoDepositAddress)
+        .where(CryptoDepositAddress.is_active)
+        .order_by(CryptoDepositAddress.coin, CryptoDepositAddress.network)
+    ).all()
+
+    coins_map: dict[str, AvailableCoinPublic] = {}
+
+    for r in active_records:
+        if r.coin not in coins_map:
+            display_name = r.display_name or r.coin
+            coins_map[r.coin] = AvailableCoinPublic(
+                coin=r.coin,
+                display_name=display_name,
+                coingecko_id=r.coingecko_id,
+                fallback_rate=r.fallback_rate,
+                networks=[],
+            )
+
+        net_key = r.network
+        net_label = get_network_display_label(net_key)
+        chain_name = get_chain_name(net_key)
+        requires_memo = bool(
+            r.memo
+            or r.coin in MEMO_REQUIRED_COINS
+            or net_key in ("RIPPLE", "XRP", "TON", "TONCOIN", "XLM", "EOS")
+        )
+
+        coins_map[r.coin].networks.append(
+            AvailableNetworkPublic(
+                key=net_key,
+                label=net_label,
+                chain_name=chain_name,
+                requires_memo=requires_memo,
+                fee_estimate=get_fee_estimate(net_key),
+                confirmation_time=get_confirmation_time(net_key),
+            )
+        )
+
+    # If BTC is not in DB, fallback to global settings if configured
+    if "BTC" not in coins_map and (settings.GLOBAL_BTC_DEPOSIT_ADDRESS or settings.COPY_TRADING_COMMISSION_BTC_ADDRESS):
+        coins_map["BTC"] = AvailableCoinPublic(
+            coin="BTC",
+            display_name="Bitcoin",
+            coingecko_id="bitcoin",
+            fallback_rate=60000.0,
+            networks=[
+                AvailableNetworkPublic(
+                    key="BITCOIN",
+                    label="Bitcoin",
+                    chain_name="Bitcoin",
+                    requires_memo=False,
+                    fee_estimate="~$2-10",
+                    confirmation_time="10-60 minutes",
+                )
+            ],
+        )
+
+    return list(coins_map.values())
 
 
 @router.get("/networks", response_model=list[NetworkInfo])
@@ -125,17 +264,36 @@ def get_available_networks(
     return networks
 
 
-@router.get("/rates", response_model=CryptoRates)
+@router.get("/rates", response_model=dict[str, float])
 async def get_crypto_rates(
-    session: SessionDep,  # noqa: ARG001
+    session: SessionDep,
     current_user: CurrentUser,  # noqa: ARG001
 ) -> Any:
     """
     Get current crypto to USD exchange rates from CoinGecko API.
-    Falls back to static rates if API key is not configured or request fails.
+    Falls back to static/configured rates if API key is not configured or request fails.
     """
-    rates = await fetch_crypto_prices()
-    return CryptoRates(**rates)
+    active_records = session.exec(
+        select(CryptoDepositAddress).where(CryptoDepositAddress.is_active)
+    ).all()
+
+    custom_coins = {
+        r.coin: r.coingecko_id
+        for r in active_records
+        if r.coingecko_id
+    }
+    custom_fallbacks = {
+        r.coin: r.fallback_rate
+        for r in active_records
+        if r.fallback_rate is not None
+    }
+
+    rates = await fetch_crypto_prices(
+        custom_coins=custom_coins,
+        custom_fallback_rates=custom_fallbacks,
+    )
+    return rates
+
 
 
 @router.post("/generate-address", response_model=GenerateAddressResponse)

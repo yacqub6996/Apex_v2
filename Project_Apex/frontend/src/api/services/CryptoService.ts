@@ -5,14 +5,26 @@
 import type { CancelablePromise } from "../core/CancelablePromise";
 import { OpenAPI } from "../core/OpenAPI";
 import { request as __request } from "../core/request";
+import type { AvailableCoinPublic } from "../models/AvailableCoinPublic";
 import type { ConfirmPaymentRequest } from "../models/ConfirmPaymentRequest";
-import type { CryptoRates } from "../models/CryptoRates";
 import type { GenerateAddressRequest } from "../models/GenerateAddressRequest";
 import type { GenerateAddressResponse } from "../models/GenerateAddressResponse";
 import type { NetworkInfo } from "../models/NetworkInfo";
 import type { TransactionPublic } from "../models/TransactionPublic";
 
 export class CryptoService {
+    /**
+     * Get Available Coins
+     * Get list of all active coins and networks available for deposit
+     * @returns AvailableCoinPublic Successful Response
+     * @throws ApiError
+     */
+    public static cryptoGetAvailableCoins(): CancelablePromise<Array<AvailableCoinPublic>> {
+        return __request(OpenAPI, {
+            method: "GET",
+            url: "/api/v1/crypto/available-coins",
+        });
+    }
     /**
      * Get Available Networks
      * Get list of available crypto networks for deposits/withdrawals
@@ -28,11 +40,11 @@ export class CryptoService {
     /**
      * Get Crypto Rates
      * Get current crypto to USD exchange rates from CoinGecko API.
-     * Falls back to static rates if API key is not configured or request fails.
-     * @returns CryptoRates Successful Response
+     * Falls back to static/configured rates if API key is not configured or request fails.
+     * @returns number Successful Response
      * @throws ApiError
      */
-    public static cryptoGetCryptoRates(): CancelablePromise<CryptoRates> {
+    public static cryptoGetCryptoRates(): CancelablePromise<Record<string, number>> {
         return __request(OpenAPI, {
             method: "GET",
             url: "/api/v1/crypto/rates",

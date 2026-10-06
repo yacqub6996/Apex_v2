@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-
 export type CopyTradingStopPreviewResponse = {
     copy_id: string;
     trader_name: string;
@@ -16,14 +15,14 @@ export type CopyTradingStopPreviewResponse = {
     equity_released: boolean;
     requires_commission_deposit: boolean;
     notice: string;
-    copyId?: string;
-    traderName?: string;
-    sessionProfit?: number;
-    copyFeePercentage?: number;
-    commissionDue?: number;
-    releaseAmount?: number;
-    heldReleasedEquity?: number;
-    immediateReleaseAmount?: number;
-    equityReleased?: boolean;
-    requiresCommissionDeposit?: boolean;
+    readonly copyId: string;
+    readonly traderName: string;
+    readonly sessionProfit: number;
+    readonly copyFeePercentage: number;
+    readonly commissionDue: number;
+    readonly releaseAmount: number;
+    readonly heldReleasedEquity: number;
+    readonly immediateReleaseAmount: number;
+    readonly equityReleased: boolean;
+    readonly requiresCommissionDeposit: boolean;
 };

@@ -6,15 +6,35 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query'
 import { CryptoService } from '@/api/services/CryptoService'
 import { useAuth } from '@/providers/auth-provider'
-import type { NetworkInfo, CryptoRates, GenerateAddressRequest, GenerateAddressResponse, ConfirmPaymentRequest, TransactionPublic } from '@/api'
+import type {
+  NetworkInfo,
+  AvailableCoinPublic,
+  GenerateAddressRequest,
+  GenerateAddressResponse,
+  ConfirmPaymentRequest,
+  TransactionPublic,
+} from '@/api'
+import type { CryptoRates } from '@/types/crypto'
 
 // Query keys
 export const cryptoKeys = {
   all: ['crypto'] as const,
+  availableCoins: () => [...cryptoKeys.all, 'available-coins'] as const,
   networks: () => [...cryptoKeys.all, 'networks'] as const,
   rates: () => [...cryptoKeys.all, 'rates'] as const,
   pendingDeposits: (userId?: string) =>
     [...cryptoKeys.all, 'pending-deposits', ...(userId ? [userId] : [])] as const,
+}
+
+/**
+ * Get all available active coins and networks
+ */
+export function useAvailableCoins(): UseQueryResult<AvailableCoinPublic[], Error> {
+  return useQuery({
+    queryKey: cryptoKeys.availableCoins(),
+    queryFn: () => CryptoService.cryptoGetAvailableCoins(),
+    staleTime: 60 * 1000, // 1 minute
+  })
 }
 
 /**
@@ -39,6 +59,7 @@ export function useCryptoRates(): UseQueryResult<CryptoRates, Error> {
     refetchInterval: 60 * 1000, // Refetch every minute
   })
 }
+
 
 /**
  * Get pending deposits for current user
@@ -204,49 +225,72 @@ export function validateAddress(address: string, network: string): { valid: bool
 
   const trimmed = address.trim()
 
+  const netUpper = network.toUpperCase()
+
   // Basic format validation by network
-  switch (network) {
-    case 'BITCOIN':
-      // Bitcoin addresses: Legacy (1...) 26-35 chars, P2SH (3...) 26-35 chars, SegWit (bc1...) 42-62 chars
-      if (trimmed.startsWith('bc1')) {
-        // Bech32 addresses are lowercase only by standard
-        if (!/^bc1[ac-hj-np-z02-9]{39,59}$/.test(trimmed)) {
-          return { valid: false, error: 'Invalid Bitcoin SegWit address format' }
-        }
-      } else if (trimmed.startsWith('1')) {
-        if (!/^1[a-zA-HJ-NP-Z0-9]{25,34}$/.test(trimmed)) {
-          return { valid: false, error: 'Invalid Bitcoin legacy address format' }
-        }
-      } else if (trimmed.startsWith('3')) {
-        if (!/^3[a-zA-HJ-NP-Z0-9]{25,34}$/.test(trimmed)) {
-          return { valid: false, error: 'Invalid Bitcoin P2SH address format' }
-        }
-      } else {
+  if (netUpper === 'BITCOIN' || netUpper === 'BTC') {
+    if (trimmed.startsWith('bc1')) {
+      if (!/^bc1[ac-hj-np-z02-9]{25,90}$/.test(trimmed)) {
+        return { valid: false, error: 'Invalid Bitcoin SegWit (bc1) address format' }
+      }
+    } else if (trimmed.startsWith('1') || trimmed.startsWith('3')) {
+      if (!/^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(trimmed)) {
         return { valid: false, error: 'Invalid Bitcoin address format' }
       }
-      break
-    
-    case 'ETHEREUM_ERC20':
-    case 'POLYGON':
-      // Ethereum addresses start with 0x and are 42 characters
-      if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
-        return { valid: false, error: 'Invalid Ethereum address format' }
-      }
-      break
-    
-    case 'TRON_TRC20':
-      // TRON addresses start with T and are 34 characters
-      if (!/^T[a-zA-HJ-NP-Z0-9]{33}$/.test(trimmed)) {
-        return { valid: false, error: 'Invalid TRON address format' }
-      }
-      break
-    
-    default:
-      // Generic validation - at least 20 characters
-      if (trimmed.length < 20) {
-        return { valid: false, error: 'Address is too short' }
-      }
+    } else {
+      return { valid: false, error: 'Invalid Bitcoin address: must start with bc1, 1, or 3' }
+    }
+  } else if (
+    netUpper === 'ETHEREUM_ERC20' ||
+    netUpper === 'POLYGON' ||
+    netUpper === 'BSC_BEP20' ||
+    netUpper === 'ARBITRUM' ||
+    netUpper === 'AVAX_C' ||
+    netUpper === 'OPTIMISM' ||
+    netUpper === 'BASE' ||
+    netUpper.includes('ERC20') ||
+    netUpper.includes('BEP20') ||
+    netUpper.includes('EVM')
+  ) {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+      return { valid: false, error: 'Invalid EVM address format: must start with 0x followed by 40 hex characters' }
+    }
+  } else if (netUpper === 'TRON_TRC20' || netUpper === 'TRON' || netUpper === 'TRC20') {
+    if (!trimmed.startsWith('T') || !/^T[a-zA-HJ-NP-Z0-9]{33}$/.test(trimmed)) {
+      return { valid: false, error: 'Invalid TRON TRC20 address format: must start with T and be 34 characters' }
+    }
+  } else if (netUpper === 'SOLANA' || netUpper === 'SOL') {
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
+      return { valid: false, error: 'Invalid Solana address format: must be 32-44 base58 characters' }
+    }
+  } else if (netUpper === 'RIPPLE' || netUpper === 'XRP') {
+    if (!trimmed.startsWith('r') || !/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(trimmed)) {
+      return { valid: false, error: 'Invalid Ripple (XRP) address format: must start with r and be 25-35 characters' }
+    }
+  } else if (netUpper === 'LITECOIN' || netUpper === 'LTC') {
+    if (
+      !(
+        (trimmed.startsWith('L') || trimmed.startsWith('M')) && /^[LM][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(trimmed)
+      ) &&
+      !(trimmed.startsWith('ltc1') && /^ltc1[ac-hj-np-z02-9]{25,90}$/.test(trimmed))
+    ) {
+      return { valid: false, error: 'Invalid Litecoin address format' }
+    }
+  } else if (netUpper === 'DOGECOIN' || netUpper === 'DOGE') {
+    if (!trimmed.startsWith('D') || !/^D[1-9A-HJ-NP-Za-km-z]{33}$/.test(trimmed)) {
+      return { valid: false, error: 'Invalid Dogecoin address format: must start with D and be 34 characters' }
+    }
+  } else if (netUpper === 'TON' || netUpper === 'TONCOIN') {
+    if (trimmed.length < 24 || trimmed.length > 66) {
+      return { valid: false, error: 'Invalid TON address format' }
+    }
+  } else {
+    // Custom / generic network validation
+    if (trimmed.length < 10) {
+      return { valid: false, error: 'Address is too short' }
+    }
   }
 
   return { valid: true }
 }
+
